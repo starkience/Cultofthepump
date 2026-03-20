@@ -1,0 +1,23 @@
+[package]
+name = "scripts"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet.workspace = true
+sncast_std.workspace = true
+contracts = { path = "../contracts" }
+cubit.workspace = true
+
+[lib]
+sierra = true
+casm = true
+
+[[target.starknet-contract]]
+build-external-contracts = [
+    "contracts::swap::swap",
+    "contracts::factory::factory",
+    "contracts::bonding_curve::bonding_curve",
+    "contracts::dutch_auction::dutch_auction",
+    "contracts::erc20::erc20",
+]

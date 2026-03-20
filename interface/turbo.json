@@ -1,0 +1,92 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "prepare": {
+      "inputs": [
+        "package.json"
+      ]
+    },
+    "cotp#prepare": {
+      "inputs": [
+        "package.json"
+      ],
+      "dependsOn": [
+        "^prepare"
+      ]
+    },
+    "typecheck": {
+      "inputs": [
+        "src/**.ts",
+        "src/**.tsx"
+      ],
+      "outputs": [],
+      "dependsOn": [
+        "prepare",
+        "^typecheck",
+        "^build"
+      ]
+    },
+    "check:circular": {},
+    "check:deps:usage": {},
+    "format": {
+      "inputs": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js"
+      ]
+    },
+    "lint": {
+      "dependsOn": [
+        "typecheck",
+        "^lint"
+      ]
+    },
+    "lint:fix": {
+      "dependsOn": [
+        "typecheck",
+        "^lint:fix"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^prepare"
+      ]
+    },
+    "start": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": [
+        "prepare"
+      ]
+    },
+    "build:production": {
+      "inputs": [
+        "yarn.lock",
+        "**/package.json",
+        "src/**/*"
+      ],
+      "outputs": [
+        "**/build/**"
+      ],
+      "dependsOn": [
+        "prepare",
+        "build"
+      ]
+    },
+    "build": {
+      "inputs": [
+        "yarn.lock",
+        "**/package.json",
+        "src/**.ts",
+        "src/**.tsx"
+      ],
+      "outputs": [
+        "**/dist/**",
+        "**/types/**"
+      ],
+      "dependsOn": [
+        "^build"
+      ]
+    }
+  }
+}

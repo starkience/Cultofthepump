@@ -1,0 +1,18 @@
+{
+  "extends": "tsconfig/ui.json",
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../utilities"
+    },
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": [
+      "jest",
+      "node"
+    ]
+  }
+}

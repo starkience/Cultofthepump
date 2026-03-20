@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hasura-ingress
+  annotations:
+    kubernetes.io/ingress.class: gce  # Use the GKE Ingress controller (GCLB)
+spec:
+  rules:
+  - host: 35.208.25.99.nip.io
+    http:
+      paths:
+      - path: /v1/graphql
+        pathType: Prefix
+        backend:
+          service:
+            name: hasura
+            port:
+              number: 8080

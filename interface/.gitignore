@@ -1,0 +1,44 @@
+# Go
+/backend/tmp
+/backend/.env
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# .yarn files
+.yarn/cache
+.yarn/versions
+.yarn/install-state.gz
+
+dist/out-tsc/*
+
+# dependencies
+node_modules
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env
+.env.defaults.local
+
+# turbo
+.turbo
+
+#build
+dist

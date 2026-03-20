@@ -1,0 +1,65 @@
+diff --git a/dist/cjs/helpers/getSplitStyles.cjs b/dist/cjs/helpers/getSplitStyles.cjs
+index d1287fb37c0423dc72d5e6742a1118062bbdc215..8379c8edaf4c0f77e8f195c49c66968888edbd1b 100644
+--- a/dist/cjs/helpers/getSplitStyles.cjs
++++ b/dist/cjs/helpers/getSplitStyles.cjs
+@@ -247,7 +247,7 @@ const getSplitStyles = (props, staticConfig, theme, themeName, componentState, s
+       isMediaOrPseudo = !!(isMedia || isPseudo);
+     if (isMediaOrPseudo && keyInit.startsWith("$group-")) {
+       const name = keyInit.split("-")[1];
+-      context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
++      // context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
+     }
+     const isStyleProp = isValidStyleKeyInit || isMediaOrPseudo || isVariant && !noExpand || isShorthand;
+     if (isStyleProp && (asChild === "except-style" || asChild === "except-style-web")) continue;
+diff --git a/dist/cjs/helpers/getSplitStyles.js b/dist/cjs/helpers/getSplitStyles.js
+index 5fc5f5a46cc6f2904c9b3397c77cb179d4647da6..023d6e0e44dc4eaf7c28d0a40175621534692159 100644
+--- a/dist/cjs/helpers/getSplitStyles.js
++++ b/dist/cjs/helpers/getSplitStyles.js
+@@ -184,7 +184,7 @@ const getSplitStyles = (props, staticConfig, theme, themeName, componentState, s
+     let isPseudo = keyInit in import_helpers.validPseudoKeys, isMedia = !isStyleLikeKey && !isPseudo && (0, import_useMedia.isMediaKey)(keyInit), isMediaOrPseudo = !!(isMedia || isPseudo);
+     if (isMediaOrPseudo && keyInit.startsWith("$group-")) {
+       const name = keyInit.split("-")[1];
+-      context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
++      // context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
+     }
+     const isStyleProp = isValidStyleKeyInit || isMediaOrPseudo || isVariant && !noExpand || isShorthand;
+     if (isStyleProp && (asChild === "except-style" || asChild === "except-style-web"))
+diff --git a/dist/esm/helpers/getSplitStyles.js b/dist/esm/helpers/getSplitStyles.js
+index a8f493e780709befb600ea08ad91bd71c352ff65..0da38fae90a06404411c52acc38309bc17d9559b 100644
+--- a/dist/esm/helpers/getSplitStyles.js
++++ b/dist/esm/helpers/getSplitStyles.js
+@@ -205,7 +205,7 @@ const getSplitStyles = (props, staticConfig, theme, themeName, componentState, s
+     let isPseudo = keyInit in validPseudoKeys, isMedia = !isStyleLikeKey && !isPseudo && isMediaKey(keyInit), isMediaOrPseudo = !!(isMedia || isPseudo);
+     if (isMediaOrPseudo && keyInit.startsWith("$group-")) {
+       const name = keyInit.split("-")[1];
+-      context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
++      // context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
+     }
+     const isStyleProp = isValidStyleKeyInit || isMediaOrPseudo || isVariant && !noExpand || isShorthand;
+     if (isStyleProp && (asChild === "except-style" || asChild === "except-style-web"))
+diff --git a/dist/esm/helpers/getSplitStyles.mjs b/dist/esm/helpers/getSplitStyles.mjs
+index 01e53b781fa418da8a79b8c161a3931e323ad073..be32da3b0e585497634d066b9d405527317867e9 100644
+--- a/dist/esm/helpers/getSplitStyles.mjs
++++ b/dist/esm/helpers/getSplitStyles.mjs
+@@ -208,7 +208,7 @@ const getSplitStyles = (props, staticConfig, theme, themeName, componentState, s
+       isMediaOrPseudo = !!(isMedia || isPseudo);
+     if (isMediaOrPseudo && keyInit.startsWith("$group-")) {
+       const name = keyInit.split("-")[1];
+-      context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
++      // context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
+     }
+     const isStyleProp = isValidStyleKeyInit || isMediaOrPseudo || isVariant && !noExpand || isShorthand;
+     if (isStyleProp && (asChild === "except-style" || asChild === "except-style-web")) continue;
+diff --git a/dist/esm/helpers/getSplitStyles.native.js b/dist/esm/helpers/getSplitStyles.native.js
+index caad32e3511550e5d0051f61c59cc1255a6f53db..b6ab447f40c8c3f9fda3836221c7f2a3a13c9c62 100644
+--- a/dist/esm/helpers/getSplitStyles.native.js
++++ b/dist/esm/helpers/getSplitStyles.native.js
+@@ -301,7 +301,7 @@ var getSplitStyles = function(props, staticConfig, theme, themeName, componentSt
+         var isShorthand = keyInit in shorthands, isVariant = !isValidStyleKeyInit && variants && keyInit in variants, isStyleLikeKey = isShorthand || isValidStyleKeyInit || isVariant, isPseudo = keyInit in validPseudoKeys, isMedia = !isStyleLikeKey && !isPseudo && isMediaKey(keyInit), isMediaOrPseudo1 = !!(isMedia || isPseudo);
+         if (isMediaOrPseudo1 && keyInit.startsWith("$group-")) {
+           var name = keyInit.split("-")[1];
+-          context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
++          // context?.groups.subscribe && !context?.groups.state[name] && (keyInit = keyInit.replace("$group-", "$group-true-"));
+         }
+         var isStyleProp = isValidStyleKeyInit || isMediaOrPseudo1 || isVariant && !noExpand || isShorthand;
+         if (!(isStyleProp && (asChild === "except-style" || asChild === "except-style-web"))) {

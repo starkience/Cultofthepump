@@ -1,0 +1,130 @@
+.trade-feed {
+  max-width: 800px;
+  margin: 4rem auto;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #0f0;
+  position: relative;
+  overflow: hidden;
+}
+
+.trade-feed::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #0f0, transparent);
+  animation: scan 2s linear infinite;
+}
+
+.trade-feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border-bottom: 1px solid #0f0;
+  position: relative;
+}
+
+.trade-feed-header h2 {
+  color: #0f0;
+  margin: 0;
+  font-family: monospace;
+  letter-spacing: 2px;
+}
+
+.signal-indicator {
+  position: absolute;
+  right: 1rem;
+  color: #0f0;
+  animation: pulse 1s infinite;
+}
+
+.trade-list {
+  padding: 1rem;
+}
+
+.trade-item {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(0, 255, 0, 0.2);
+  background: rgba(0, 255, 0, 0.05);
+  font-family: monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+.trade-item.new-trade {
+  animation: glitch 0.3s ease-out;
+}
+
+.trade-item.buy {
+  border-left: 3px solid #0f0;
+}
+
+.trade-item.sell {
+  border-left: 3px solid #f00;
+}
+
+.trade-symbol {
+  font-size: 1.2rem;
+  color: #0f0;
+  margin-bottom: 0.5rem;
+}
+
+.trade-details {
+  display: flex;
+  gap: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.trade-type, .trade-side, .trade-amount {
+  font-size: 0.9rem;
+}
+
+.trade-side {
+  color: #0f0;
+}
+
+.trade-item.sell .trade-side {
+  color: #f00;
+}
+
+@keyframes scan {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulse {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes glitch {
+  0% {
+    transform: translateX(-2px);
+    opacity: 0;
+  }
+  20% {
+    transform: translateX(2px);
+    opacity: 0.3;
+  }
+  40% {
+    transform: translateX(-1px);
+    opacity: 0.6;
+  }
+  60% {
+    transform: translateX(1px);
+    opacity: 0.8;
+  }
+  80% {
+    transform: translateX(-0.5px);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+} 

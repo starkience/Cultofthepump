@@ -1,0 +1,33 @@
+[package]
+name = "contracts"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet.workspace = true
+cubit.workspace = true
+openzeppelin_access.workspace = true
+openzeppelin_interfaces.workspace = true
+openzeppelin_token.workspace = true
+openzeppelin_upgrades.workspace = true
+ekubo.workspace = true
+ekubo_oracle_extension.workspace = true
+assert_macros.workspace = true
+
+[dev-dependencies]
+snforge_std.workspace = true
+
+[[target.starknet-contract]]
+sierra = true
+
+[lib]
+sierra = true
+casm = true
+
+[[tool.snforge.fork]]
+name = "mainnet"
+url = "https://1rpc.io/starknet"
+block_id.number = "7926300"
+
+[scripts]
+test = "snforge test"

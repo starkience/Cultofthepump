@@ -1,0 +1,53 @@
+{
+  "name": "cotp-fun",
+  "version": "0.0.0",
+  "dependencies": {
+    "@babel/runtime": "7.18.9",
+    "@manypkg/cli": "^0.19.2",
+    "eslint": "8.44.0",
+    "moti": "0.29.0",
+    "prettier": "3.3.3",
+    "prettier-plugin-organize-imports": "4.1.0",
+    "syncpack": "^8.5.14",
+    "turbo": "latest"
+  },
+  "engines": {
+    "node": "=18.12.1",
+    "yarn": ">=3.2.3",
+    "npm": "please-use-yarn"
+  },
+  "manypkg": {
+    "ignoredRules": [
+      "INTERNAL_MISMATCH"
+    ]
+  },
+  "packageManager": "yarn@3.2.3",
+  "private": true,
+  "scripts": {
+    "g:build": "turbo run build --concurrency=100%",
+    "g:check:deps": "manypkg check",
+    "g:check:circular": "turbo run check:circular --parallel",
+    "g:format:deps": "syncpack format",
+    "g:lint": "turbo run lint --parallel",
+    "g:lint:fix": "turbo run lint:fix --parallel",
+    "g:rm:nodemodules": "rm -rf node_modules",
+    "g:run-fast-checks": "turbo run typecheck lint build --parallel",
+    "g:run-all-checks": "turbo run typecheck lint test build check:circular --parallel",
+    "g:test": "turbo run test --parallel",
+    "g:snapshots": "turbo run snapshots --parallel",
+    "g:typecheck": "turbo run typecheck --parallel",
+    "lfg": "yarn && yarn mobile env:local:download && yarn g:build && yarn mobile pod && yarn mobile ios",
+    "web": "yarn workspace @cotp/interface",
+    "ui": "yarn workspace ui",
+    "cotp": "yarn workspace cotp",
+    "utilities": "yarn workspace utilities"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "config/*"
+  ],
+  "resolutions": {
+    "@tamagui/web@1.121.3": "patch:@tamagui/web@npm%3A1.121.3#./.yarn/patches/@tamagui-web-npm-1.121.3-bebfc6b246.patch"
+  }
+}

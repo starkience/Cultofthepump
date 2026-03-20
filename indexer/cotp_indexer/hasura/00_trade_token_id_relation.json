@@ -1,0 +1,27 @@
+{
+    "type": "bulk",
+    "args": [
+        {
+            "type": "postgres_create_object_relationship",
+            "args": {
+                "table": {
+                    "name": "trade",
+                    "schema": "public"
+                },
+                "name": "token",
+                "source": "default",
+                "using": {
+                    "manual_configuration": {
+                        "remote_table": {
+                            "name": "token",
+                            "schema": "public"
+                        },
+                        "column_mapping": {
+                            "token_id": "id"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

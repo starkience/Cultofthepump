@@ -1,0 +1,37 @@
+*.tsbuildinfo
+__generated__
+__mocks__
+.tamagui
+.turbo
+.turbo
+.yarn
+@types
+*.html
+*.inc
+*.json
+*.md
+*.yml
+build
+craco.config.cjs
+dist
+jest-setup.js
+jest.config.js
+jest.config.js
+metro.config.js
+node_modules
+types
+
+# app/package specific
+
+# mobile
+
+apps/mobile/ios
+apps/mobile/android
+
+# extension
+
+apps/extension/dev
+
+# eslint partials
+
+packages/eslint-config/restrictedImports.js

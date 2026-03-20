@@ -1,0 +1,13 @@
+import { Path, Svg } from 'react-native-svg'
+
+// eslint-disable-next-line no-relative-import-paths/no-relative-import-paths
+import { createIcon } from '../factories/createIcon'
+
+export const Check = createIcon({
+  name: 'Check',
+  getIcon: (props) => (
+    <Svg viewBox="0 0 28 22" fill="currentColor" {...props}>
+      <Path d="M27.65375,2.852514l-2.506331-2.506407c-.461423-.461486-1.209709-.461486-1.671132.000061l-12.951575,12.952506c-.461423.461486-1.209709.461548-1.671132,0,0,0-4.330294-4.330075-4.330294-4.330197-.461423-.46112-1.209465-.460998-1.670888.000366L.346067,11.475189c-.461423.461486-.461423,1.209594,0,1.67108l8.507513,8.507623c.461423.461486,1.209709.461486,1.671132-.000061L27.65375,4.523656c.461667-.461486.461667-1.209655,0-1.671141Z" />
+    </Svg>
+  ),
+})

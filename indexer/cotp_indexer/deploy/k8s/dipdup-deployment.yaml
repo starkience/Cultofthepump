@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dipdup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dipdup
+  template:
+    metadata:
+      labels:
+        app: dipdup
+    spec:
+      containers:
+        - args:
+            - -c
+            - dipdup.yaml
+            - -c
+            - configs/dipdup.k8s.yaml
+            - run
+          envFrom:
+            - secretRef:
+                name: dipdup-env
+          image: us-central1-docker.pkg.dev/exploration-dev-417917/cotp/indexer:latest
+          name: dipdup
+          ports:
+            - containerPort: 46339
+              protocol: TCP
+            - containerPort: 9000
+              protocol: TCP
+      restartPolicy: Always

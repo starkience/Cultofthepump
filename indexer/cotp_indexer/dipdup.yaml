@@ -1,0 +1,84 @@
+spec_version: 3.0
+package: cotp_indexer
+
+logging: INFO
+
+datasources:
+  # subsquid:
+  #   kind: starknet.subsquid
+  #   url: ${SUBSQUID_URL:-https://v2.archive.subsquid.io/network/starknet-sepolia}
+  node:
+    kind: starknet.node
+    url: ${NODE_URL:-https://free-rpc.nethermind.io/sepolia-juno/v0_7}
+    http:
+      ratelimit_rate: 3
+      ratelimit_period: 1
+      ratelimit_sleep: 1
+
+contracts:
+  factory:
+    kind: starknet
+    address: '0x5783339cac4cb54b79c5c505447bd520f77c1246c89faeb24627b400e5d93b3'
+    typename: factory
+  swap:
+    kind: starknet
+    address: '0x31de8b9d37b0cffaef90f5e17fd25554c2b5038ec96ffe841fd2fe01c733911'
+    typename: swap
+  token:
+    kind: starknet
+    address: '0x7aebf673b62253e468087135aaf74f41ef36859c63492aab451d5e7fd7f2eff'
+    typename: token
+  # pool:
+  #   kind: starknet
+  #   address: '0x6ad3a7546129bd91394330516ece313aedf3f1df262f12e80bd7b4ce493f8c6'
+  #   typename: pool
+
+indexes:
+  factory_events:
+    kind: starknet.events
+    first_level: 380000
+    datasources:
+      #- subsquid
+      - node
+    handlers:
+      - callback: on_token_launched
+        contract: factory
+        name: ShitcoinLaunched
+  swap_events:
+    kind: starknet.events
+    first_level: 380000
+    datasources:
+      #- subsquid
+      - node
+    handlers:
+      - callback: on_token_bought
+        contract: swap
+        name: TokenBought
+      - callback: on_token_sold
+        contract: swap
+        name: TokenSold
+      - callback: on_strk_price_updated
+        contract: swap
+        name: StrkPriceUpdated
+      - callback: on_pool_launched
+        contract: swap
+        name: PoolLaunched
+  #
+  # ---- For code generation only ----
+  #
+  # token_events_init:
+  #   template: token_events
+  #   values:
+  #     contract: token
+
+templates:
+  token_events:
+    kind: starknet.events
+    first_level: 380000
+    datasources:
+      #- subsquid
+      - node
+    handlers:
+      - callback: on_token_transferred
+        contract: <contract>
+        name: Transfer

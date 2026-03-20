@@ -1,0 +1,224 @@
+[
+    {
+      "type": "impl",
+      "name": "Shimplementation",
+      "interface_name": "cult_of_the_pump::factory::Shinterface"
+    },
+    {
+      "type": "struct",
+      "name": "core::byte_array::ByteArray",
+      "members": [
+        {
+          "name": "data",
+          "type": "core::array::Array::<core::bytes_31::bytes31>"
+        },
+        {
+          "name": "pending_word",
+          "type": "core::felt252"
+        },
+        {
+          "name": "pending_word_len",
+          "type": "core::integer::u32"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "core::integer::u256",
+      "members": [
+        {
+          "name": "low",
+          "type": "core::integer::u128"
+        },
+        {
+          "name": "high",
+          "type": "core::integer::u128"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "cult_of_the_pump::factory::Shinterface",
+      "items": [
+        {
+          "type": "function",
+          "name": "launshitcoin",
+          "inputs": [
+            {
+              "name": "shit_name",
+              "type": "core::byte_array::ByteArray"
+            },
+            {
+              "name": "shit_symbol",
+              "type": "core::byte_array::ByteArray"
+            },
+            {
+              "name": "initial_shniping",
+              "type": "core::integer::u256"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::starknet::contract_address::ContractAddress"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "cult_of_the_pump::swap::TradeDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "openzeppelin_token::erc20::interface::IERC20Dispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "ekubo_oracle_extension::oracle::IOracleDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "constructor",
+      "name": "constructor",
+      "inputs": [
+        {
+          "name": "shitcoin_class_hash",
+          "type": "core::starknet::class_hash::ClassHash"
+        },
+        {
+          "name": "swap",
+          "type": "cult_of_the_pump::swap::TradeDispatcher"
+        },
+        {
+          "name": "shit_fees",
+          "type": "core::integer::u256"
+        },
+        {
+          "name": "strk",
+          "type": "openzeppelin_token::erc20::interface::IERC20Dispatcher"
+        },
+        {
+          "name": "treasury",
+          "type": "core::starknet::contract_address::ContractAddress"
+        },
+        {
+          "name": "oracle",
+          "type": "ekubo_oracle_extension::oracle::IOracleDispatcher"
+        },
+        {
+          "name": "usdc",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::factory::factory::ShitcoinLaunched",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "shitcoin_address",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "creator",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "name",
+          "type": "core::byte_array::ByteArray",
+          "kind": "data"
+        },
+        {
+          "name": "symbol",
+          "type": "core::byte_array::ByteArray",
+          "kind": "data"
+        },
+        {
+          "name": "initial_shniping",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "pile_of_shit",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "fees_paid",
+          "type": "core::integer::u256",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::factory::factory::FactoryConfigured",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "shitcoin_class_hash",
+          "type": "core::starknet::class_hash::ClassHash",
+          "kind": "data"
+        },
+        {
+          "name": "swap",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "shit_fees",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "strk",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "treasury",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::factory::factory::Event",
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "ShitcoinLaunched",
+          "type": "cult_of_the_pump::factory::factory::ShitcoinLaunched",
+          "kind": "nested"
+        },
+        {
+          "name": "FactoryConfigured",
+          "type": "cult_of_the_pump::factory::factory::FactoryConfigured",
+          "kind": "nested"
+        }
+      ]
+    }
+  ]

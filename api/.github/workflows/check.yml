@@ -1,0 +1,34 @@
+name: check
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+permissions: read-all
+
+jobs:
+    fmt:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - run: go get ./...
+            - run: go build -v ./...
+            - run: test -z $(gofmt -l .)
+
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - run: go get ./...
+            - run: go build -v ./...
+            - run: test -z $(go vet ./...)
+
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - run: go get ./...
+            - run: go build -v ./...
+            - run: go test ./...

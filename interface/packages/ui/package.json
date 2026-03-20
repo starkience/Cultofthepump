@@ -1,0 +1,47 @@
+{
+  "name": "ui",
+  "version": "0.0.0",
+  "dependencies": {
+    "@tamagui/helpers-icon": "1.121.3",
+    "expo-linear-gradient": "14.0.1",
+    "react": "18.2.0",
+    "react-native": "0.76.1",
+    "react-native-svg": "15.1.0",
+    "react-native-web": "0.19.13",
+    "tamagui": "1.121.3",
+    "utilities": "workspace:^"
+  },
+  "devDependencies": {
+    "@cotp/eslint-config": "workspace:^",
+    "@tamagui/build": "1.121.3",
+    "@tamagui/core": "1.121.3",
+    "@types/node": "22.9.0",
+    "cheerio": "1.0.0",
+    "esbuild-register": "^3.5.0",
+    "eslint": "8.44.0",
+    "typescript": "5.3.3",
+    "uppercamelcase": "3.0.0"
+  },
+  "files": [
+    "types",
+    "dist"
+  ],
+  "main": "./src/index.ts",
+  "module:jsx": "src",
+  "private": true,
+  "scripts": {
+    "build": "tamagui-build --ignore-base-url",
+    "build:icons": "node -r esbuild-register ./src/scripts/componentize-icons.ts",
+    "build:icons:missing": "yarn build:icons --skip-existing",
+    "check:deps:usage": "depcheck",
+    "lint": "eslint src --max-warnings=0",
+    "format": "../../scripts/prettier.sh",
+    "lint:fix": "eslint src --fix",
+    "typecheck": "tsc -b",
+    "watch": "yarn build --watch"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "types": "./types/index"
+}

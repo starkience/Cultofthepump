@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hasura
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hasura
+  template:
+    metadata:
+      labels:
+        app: hasura
+    spec:
+      containers:
+        - env:
+            - name: HASURA_GRAPHQL_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dipdup-env
+                  key: HASURA_GRAPHQL_DATABASE_URL
+            - name: HASURA_GRAPHQL_ADMIN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: dipdup-env
+                  key: HASURA_SECRET
+            - name: HASURA_GRAPHQL_DEV_MODE
+              value: "false"
+            - name: HASURA_GRAPHQL_ENABLE_CONSOLE
+              value: "false"
+            - name: HASURA_GRAPHQL_ENABLE_TELEMETRY
+              value: "false"
+            - name: HASURA_GRAPHQL_LOG_LEVEL
+              value: info
+            - name: HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES
+              value: "true"
+            - name: HASURA_GRAPHQL_UNAUTHORIZED_ROLE
+              value: user
+            - name: HASURA_GRAPHQL_CORS_DOMAIN
+              value: "*"
+            - name: HASURA_GRAPHQL_USE_SSL
+              value: "true"
+          image: hasura/graphql-engine:latest
+          name: hasura
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz   # This path should be served by your application for liveness check
+              port: 8080
+            initialDelaySeconds: 10   # Wait 10 seconds after container starts before first probe
+            periodSeconds: 30         # Probe every 30 seconds
+            timeoutSeconds: 5         # Timeout after 5 seconds
+            failureThreshold: 3       # After 3 failures, mark the pod as failed
+      restartPolicy: Always

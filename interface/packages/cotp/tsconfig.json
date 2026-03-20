@@ -1,0 +1,25 @@
+{
+  "extends": "tsconfig/app.json",
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.json",
+    "src/**/*.mts"
+  ],
+  "references": [
+    {
+      "path": "../ui"
+    },
+    {
+      "path": "../utilities"
+    },
+  ],
+  "compilerOptions": {
+    "types": [
+      "chrome",
+      "jest",
+      "node"
+    ]
+  }
+}

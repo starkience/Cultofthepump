@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db
+  template:
+    metadata:
+      labels:
+        app: db
+    spec:
+      containers:
+        - env:
+            - name: POSTGRES_DB
+              value: dipdup
+            - name: POSTGRES_USER
+              value: dipdup
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: dipdup-env
+                  key: POSTGRES_PASSWORD
+          image: timescale/timescaledb:latest-pg15
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready -U dipdup
+            failureThreshold: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: db
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: db-storage
+      restartPolicy: Always
+      volumes:
+        - name: db-storage
+          persistentVolumeClaim:
+            claimName: db-pvc

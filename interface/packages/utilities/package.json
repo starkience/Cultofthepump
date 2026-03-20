@@ -1,0 +1,31 @@
+{
+  "name": "utilities",
+  "version": "0.0.0",
+  "dependencies": {
+    "dayjs": "1.11.13",
+    "react": "18.2.0",
+    "starknet": "6.11.0"
+  },
+  "devDependencies": {
+    "@cotp/eslint-config": "workspace:^",
+    "@types/chrome": "0.0.254",
+    "@types/react": "^18.0.15",
+    "eslint": "8.44.0",
+    "typescript": "5.3.3"
+  },
+  "main": "src/index.ts",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b",
+    "check:deps:usage": "depcheck && yarn check-promise-version",
+    "check-promise-version": "../../scripts/check-promise-version.sh",
+    "format": "../../scripts/prettier.sh",
+    "lint": "eslint . --ext ts,tsx --max-warnings=0",
+    "lint:fix": "eslint . --ext ts,tsx --fix",
+    "test": "jest",
+    "typecheck": "tsc -b"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

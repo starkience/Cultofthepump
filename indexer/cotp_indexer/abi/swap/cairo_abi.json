@@ -1,0 +1,329 @@
+[
+    {
+      "type": "impl",
+      "name": "Tradeable",
+      "interface_name": "cult_of_the_pump::swap::Trade"
+    },
+    {
+      "type": "struct",
+      "name": "core::integer::u256",
+      "members": [
+        {
+          "name": "low",
+          "type": "core::integer::u128"
+        },
+        {
+          "name": "high",
+          "type": "core::integer::u128"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "openzeppelin_token::erc20::interface::IERC20Dispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "cult_of_the_pump::swap::Trade",
+      "items": [
+        {
+          "type": "function",
+          "name": "buy",
+          "inputs": [
+            {
+              "name": "strk",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "token",
+              "type": "openzeppelin_token::erc20::interface::IERC20Dispatcher"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "external"
+        },
+        {
+          "type": "function",
+          "name": "sell",
+          "inputs": [
+            {
+              "name": "amount",
+              "type": "core::integer::u256"
+            },
+            {
+              "name": "token",
+              "type": "openzeppelin_token::erc20::interface::IERC20Dispatcher"
+            }
+          ],
+          "outputs": [
+            {
+              "type": "core::integer::u256"
+            }
+          ],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "impl",
+      "name": "SwapSettersImpl",
+      "interface_name": "cult_of_the_pump::swap::SwapSetters"
+    },
+    {
+      "type": "interface",
+      "name": "cult_of_the_pump::swap::SwapSetters",
+      "items": [
+        {
+          "type": "function",
+          "name": "set_strk_price",
+          "inputs": [
+            {
+              "name": "token",
+              "type": "core::starknet::contract_address::ContractAddress"
+            },
+            {
+              "name": "price",
+              "type": "core::integer::u128"
+            }
+          ],
+          "outputs": [],
+          "state_mutability": "external"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "cult_of_the_pump::bonding_curve::BondingPriceDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "ekubo::interfaces::core::ICoreDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "ekubo::interfaces::token_registry::ITokenRegistryDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "struct",
+      "name": "ekubo::interfaces::positions::IPositionsDispatcher",
+      "members": [
+        {
+          "name": "contract_address",
+          "type": "core::starknet::contract_address::ContractAddress"
+        }
+      ]
+    },
+    {
+      "type": "constructor",
+      "name": "constructor",
+      "inputs": [
+        {
+          "name": "strk_contract",
+          "type": "openzeppelin_token::erc20::interface::IERC20Dispatcher"
+        },
+        {
+          "name": "bonding_curve",
+          "type": "cult_of_the_pump::bonding_curve::BondingPriceDispatcher"
+        },
+        {
+          "name": "treasury",
+          "type": "core::starknet::contract_address::ContractAddress"
+        },
+        {
+          "name": "ekubo_core",
+          "type": "ekubo::interfaces::core::ICoreDispatcher"
+        },
+        {
+          "name": "ekubo_registry",
+          "type": "ekubo::interfaces::token_registry::ITokenRegistryDispatcher"
+        },
+        {
+          "name": "ekubo_positions",
+          "type": "ekubo::interfaces::positions::IPositionsDispatcher"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::swap::swap::TokenBought",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "token",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "key"
+        },
+        {
+          "name": "buyer",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "strk_amount",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "token_amount",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "market_cap",
+          "type": "core::integer::u128",
+          "kind": "data"
+        },
+        {
+          "name": "fees",
+          "type": "core::integer::u256",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::swap::swap::TokenSold",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "token",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "key"
+        },
+        {
+          "name": "seller",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "token_amount",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "strk_amount",
+          "type": "core::integer::u256",
+          "kind": "data"
+        },
+        {
+          "name": "market_cap",
+          "type": "core::integer::u128",
+          "kind": "data"
+        },
+        {
+          "name": "fees",
+          "type": "core::integer::u256",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::swap::swap::StrkPriceUpdated",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "token",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "key"
+        },
+        {
+          "name": "old_price",
+          "type": "core::integer::u128",
+          "kind": "data"
+        },
+        {
+          "name": "new_price",
+          "type": "core::integer::u128",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::swap::swap::PoolLaunched",
+      "kind": "struct",
+      "members": [
+        {
+          "name": "token",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "token0",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "token1",
+          "type": "core::starknet::contract_address::ContractAddress",
+          "kind": "data"
+        },
+        {
+          "name": "tick_spacing",
+          "type": "core::integer::u128",
+          "kind": "data"
+        },
+        {
+          "name": "fee",
+          "type": "core::integer::u128",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "name": "cult_of_the_pump::swap::swap::Event",
+      "kind": "enum",
+      "variants": [
+        {
+          "name": "TokenBought",
+          "type": "cult_of_the_pump::swap::swap::TokenBought",
+          "kind": "nested"
+        },
+        {
+          "name": "TokenSold",
+          "type": "cult_of_the_pump::swap::swap::TokenSold",
+          "kind": "nested"
+        },
+        {
+          "name": "StrkPriceUpdated",
+          "type": "cult_of_the_pump::swap::swap::StrkPriceUpdated",
+          "kind": "nested"
+        },
+        {
+          "name": "PoolLaunched",
+          "type": "cult_of_the_pump::swap::swap::PoolLaunched",
+          "kind": "nested"
+        }
+      ]
+    }
+  ]

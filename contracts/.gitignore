@@ -1,0 +1,9 @@
+target
+.snfoundry_cache/
+curve.py
+ekubo.ipynb
+profile
+snfoundry_trace
+.snfoundry_versioned_programs
+diff*
+*.json

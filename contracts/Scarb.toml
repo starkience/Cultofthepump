@@ -1,0 +1,51 @@
+[workspace]
+members = ["scripts", "contracts"]
+
+[workspace.dependencies]
+starknet = "2.13.1"
+cubit = { path = "vendor/cubit" }
+openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
+openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
+openzeppelin_token = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
+openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
+ekubo = { git = "https://github.com/ekuboprotocol/abis" }
+ekubo_oracle_extension = { git = "https://github.com/EkuboProtocol/oracle-extension", rev = "054747d57d865a73ae5e4874e50eab28b777d732" }
+snforge_std = "0.58.0"
+assert_macros = "2.13.1"
+sncast_std = "0.58.0"
+
+[package]
+name = "cult_of_the_pump"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet.workspace = true
+contracts = { path = "contracts" }
+
+[dev-dependencies]
+snforge_std.workspace = true
+assert_macros.workspace = true
+
+[[target.starknet-contract]]
+sierra = true
+
+[lib]
+sierra = true
+casm = true
+
+[tool.fmt]
+sort-module-level-items = true
+
+[[tool.snforge.fork]]
+name = "mainnet"
+url = "https://1rpc.io/starknet"
+block_id.number = "7926300"
+
+[scripts]
+test = "snforge test"
+
+[profile.dev.cairo]
+unstable-add-statements-code-locations-debug-info = true
+unstable-add-statements-functions-debug-info = true
+inlining-strategy = "avoid"
