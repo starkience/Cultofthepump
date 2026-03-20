@@ -4,7 +4,7 @@ Smart contracts for Cult of the Pump project.
 
 ## Installation
 
-Requires Scarb 2.8.5 (does not work with 2.9) and Starknet Foundry 0.34.
+Requires Scarb 2.13.1 and Starknet Foundry 0.58.0.
 
 ## Deployment
 

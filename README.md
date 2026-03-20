@@ -16,10 +16,18 @@ Personal private monorepo workspace for the Cult of the Pump codebases.
   Starknet contracts workspace imported from the upgraded local `cultofthepump/contracts` tree.
 - `docs/manifesto/`
   Project manifesto imported from `cultofthepump/manifesto`.
-- `archive/org-monorepo/`
-  Legacy org monorepo snapshot kept for reference.
 - `archive/import-snapshots/`
-  Raw import staging snapshots kept out of the active workspace.
+  Local ignored import staging snapshots, kept out of the active workspace.
+
+## Root Commands
+
+- `make contracts-build`
+- `make contracts-test`
+- `make api-build`
+- `make indexer-check`
+- `make verify`
+
+See `docs/SETUP.md` for the minimal setup flow.
 
 ## Notes
 

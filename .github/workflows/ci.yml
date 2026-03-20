@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: protocol/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.asdf
+            ~/.cargo
+            ~/.cache/scarb
+          key: contracts-${{ runner.os }}-${{ hashFiles('protocol/contracts/.tool-versions', 'protocol/contracts/Scarb.lock') }}
+      - uses: asdf-vm/actions/setup@v3
+      - run: asdf plugin add scarb || true
+      - run: asdf plugin add starknet-foundry || true
+      - run: asdf install
+      - run: scarb build
+      - run: snforge test --package contracts
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+      - run: go build ./...
