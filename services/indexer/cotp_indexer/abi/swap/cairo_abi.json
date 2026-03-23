@@ -198,7 +198,7 @@
         },
         {
           "name": "market_cap",
-          "type": "core::integer::u128",
+          "type": "core::integer::u256",
           "kind": "data"
         },
         {
@@ -235,7 +235,7 @@
         },
         {
           "name": "market_cap",
-          "type": "core::integer::u128",
+          "type": "core::integer::u256",
           "kind": "data"
         },
         {

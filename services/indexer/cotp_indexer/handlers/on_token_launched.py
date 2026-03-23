@@ -13,13 +13,19 @@ async def on_token_launched(
     token_name = event.payload.name
     token_symbol = event.payload.symbol
     token_address = hex(event.payload.shitcoin_address)
-    
+
     contract_name = f'token_{token_symbol.lower()}_{token_address[-8:]}'
-    await ctx.add_contract(name=contract_name, kind='starknet', address=token_address, typename='token')
-    
+    try:
+        await ctx.add_contract(name=contract_name, kind='starknet', address=token_address, typename='token')
+    except Exception:
+        pass  # contract may already exist on re-index
+
     index_name = f'{contract_name}_index'
-    await ctx.add_index(name=index_name, template='token_events', values={'contract': contract_name, 'first_level': 300000})
-    
+    try:
+        await ctx.add_index(name=index_name, template='token_events', values={'contract': contract_name})
+    except Exception:
+        pass  # index may already exist on re-index
+
     ctx.logger.info(f"on_token_launched: {token_name}, symbol {token_symbol} ({token_address[-8:]})")
 
     token = models.Token(
@@ -30,6 +36,6 @@ async def on_token_launched(
         initial_supply=Decimal(event.payload.pile_of_shit),
         initial_price=Decimal(event.payload.initial_shniping),
         contract_address=token_address,
-        launch_fee=Decimal(event.payload.fees_paid),
+        launch_fee=Decimal(0),
     )
     await token.save()

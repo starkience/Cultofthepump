@@ -5,7 +5,7 @@ import { useAuctionPrice, useCultData, useIsValidSummonSteps } from 'state/summo
 import { Rune } from './Rune'
 import { useCallback, useEffect, useMemo } from 'react'
 import { SIDED_STEPS } from 'pages/Summon/CardsHelpers'
-import { useSendTransaction } from '@starknet-react/core'
+import { useSendTransaction, useBlock } from '@starknet-react/core'
 import { STRK_SEPOLIA } from 'cotp/src/constants/tokens'
 import { Token } from 'cotp/src/features/entities/token'
 import { useToken, useDutchAuction } from 'cotp/src/hooks/useContract'
@@ -32,22 +32,41 @@ export function SummonCard(props: FlexProps) {
   [isValidSummon, isValidSummonSteps])
 
   // get global state
-  const { name, symbol } = useCultData()
+  const { name, symbol, snipingWei } = useCultData()
   const auctionPrice = useAuctionPrice()
 
   // prepare tx
   const dutchAuction = useDutchAuction()
   const strk = useToken(STRK_SEPOLIA)
 
+  const devBypass = import.meta.env.VITE_DEV_AUCTION_BYPASS === 'true'
+  const { data: block } = useBlock({ blockIdentifier: 'latest' })
+
   // populate calls
   const calls = useMemo(() => {
-    if (!isValidSummon) return undefined
+    if (!isValidSummon || !strk || !dutchAuction) return undefined
 
+    const sniping = snipingWei ?? '0'
+    const snipingBig = BigInt(sniping)
+
+    // In dev bypass mode, prepend create_auction and approve end_price (10 STRK) + sniping.
+    if (devBypass && block) {
+      const END_PRICE = BigInt('10000000000000000000') // 10 STRK — deployed end_price
+      const totalApprove = (END_PRICE + snipingBig).toString()
+      return [
+        dutchAuction.populate('create_auction', [(block.timestamp - 10).toString(), { low: '0', high: '0' }]),
+        strk.populate('approve', [dutchAuction.address, totalApprove]),
+        dutchAuction.populate('bid', [name, symbol, { low: sniping, high: '0' }]),
+      ]
+    }
+
+    const auctionPriceBig = BigInt(auctionPrice ?? '0')
+    const totalApprove = (auctionPriceBig + snipingBig).toString()
     return [
-      strk.populate('approve', [dutchAuction.address, auctionPrice]),
-      dutchAuction.populate('bid', [name, symbol]), // TODO: add manifesto
+      strk.populate('approve', [dutchAuction.address, totalApprove]),
+      dutchAuction.populate('bid', [name, symbol, { low: sniping, high: '0' }]),
     ]
-  }, [isValidSummon, auctionPrice, dutchAuction, strk, name, symbol])
+  }, [isValidSummon, auctionPrice, dutchAuction, strk, name, symbol, snipingWei, devBypass, block])
 
   // handle tx
   const [, setCalls] = useCalls()

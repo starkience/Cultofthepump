@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/cultofthepump/api/internal/config"
 	"github.com/cultofthepump/api/internal/db"
@@ -18,8 +19,16 @@ func main() {
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/tokens", handlers.TokensFetch).Methods("GET")
-	r.HandleFunc("/tokens", handlers.TokensCreate).Methods("POST")
+	r.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}).Methods("GET")
+	r.HandleFunc("/tokens", handlers.TokensFetch).Methods("GET", "OPTIONS")
+	r.HandleFunc("/tokens", handlers.TokensCreate).Methods("POST", "OPTIONS")
 
-	log.Fatal(http.ListenAndServe(":8080", r))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }

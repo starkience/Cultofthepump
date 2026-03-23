@@ -1,19 +1,25 @@
 import Multicall from 'cotp/src/contracts/Multicall'
 import DutchAuction from 'cotp/src/contracts/DutchAuction'
 import ERC20 from 'cotp/src/contracts/ERC20'
+import Swap from 'cotp/src/contracts/Swap'
+import BondingCurve from 'cotp/src/contracts/BondingCurve'
 
 export const MULTICALL_ADDRESS = '0x64c8d452ec94521590795c5402e457a1da1faf92995228d6ac78981abd03c67'
 
-export const BOUNDING_CURVE_ADDRESS = '0x5C7B4187DF814C4AC584388CD9A985A8D9A81E31526C8613436BE5AED91B8CA'
+export const BOUNDING_CURVE_ADDRESS = '0x051edfc985b303c7517e1daadd972b8edbe4bfd8484edc6f9a810704c0931975'
 
-export const SWAP_ADDRESS = '0x72EE062817AF87393979CF5DF4D452845B875E031BD6076539C9D4816F0FD9E'
+export const SWAP_ADDRESS = '0x07a6c0500a1596c0a501156ba660c84c461a599053ab96319d61dfc2626a45b9'
 
-export const FACTORY_ADDRESS = '0x7840FCDB1595E3CEEEE8BEDC6D98F11D3FCCB4490182A3988C7721FFB887B30'
+export const FACTORY_ADDRESS = '0x0135abb443cbba9738fe63d55a06810fdf14b605ddc5262220a889411baede25'
 
-export const DUTCH_AUCTION_ADDRESS = '0x45FB91B77A87D33C4A76A37C29B27466CEA4BC4ED1FC05CC122D0C450EF91B1'
+export const DUTCH_AUCTION_ADDRESS = '0x019326451eb2955333d4238cd2bdd526a1af5cca842511e3246da61f9a1d859a'
 
 export const MulticallABI = Multicall.abi
 
 export const DutchAuctionABI = DutchAuction.abi
 
 export const ERC20ABI = ERC20.abi
+
+export const SwapABI = Swap.abi
+
+export const BondingCurveABI = BondingCurve.abi

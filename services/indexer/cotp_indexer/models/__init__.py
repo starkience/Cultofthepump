@@ -14,6 +14,7 @@ class Token(Model):
     launch_fee = fields.DecimalField(max_digits=80, decimal_places=0)
     contract_address = fields.TextField(max_length=66)
     num_holders = fields.IntField(default=0)
+    graduated = fields.BooleanField(default=False)
 
 
 class Holder(Model):
@@ -55,6 +56,9 @@ class Trade(Model):
     kind = fields.IntEnumField(enum_type=TradeKind)
     token_qty = fields.DecimalField(max_digits=80, decimal_places=0)
     strk_qty = fields.DecimalField(max_digits=80, decimal_places=0)
+    market_cap = fields.DecimalField(max_digits=80, decimal_places=0, default=0)
+    block_number = fields.BigIntField(default=0)
+    timestamp = fields.DatetimeField(null=True)
 
     token_id = fields.DecimalField(max_digits=80, decimal_places=0)
     trader_id = fields.DecimalField(max_digits=80, decimal_places=0)

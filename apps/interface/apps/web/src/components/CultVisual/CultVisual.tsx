@@ -1,6 +1,7 @@
 import { WindowCard } from 'components/Card/WindowCard'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Button, Flex, Image as ImageComponent, styled, Text, useSigilColors } from 'ui/src'
+import { Button, Flex, Image as ImageComponent, SpinningLoader, styled, Text, useSigilColors } from 'ui/src'
+import { TextInput } from 'ui/src'
 import { Upload } from 'ui/src/components/icons'
 import { useHover } from '@tamagui/react-native-web-internals'
 import { useForm } from 'react-hook-form'
@@ -9,6 +10,27 @@ import { parseFileSize, formatFileSize, parseFileType, formatFileType, parseFile
 import { Status, UploadedImage, UploadedImageField } from 'components/CultVisual/types'
 import { VisualDataField } from 'components/CultVisual/VisualDataField'
 import { useSetCultVisual } from 'state/summon/hooks'
+
+// Upload to catbox.moe — free, no auth, permanent hosting
+async function uploadImage(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('reqtype', 'fileupload')
+  formData.append('fileToUpload', file)
+
+  const res = await fetch('https://catbox.moe/user/api.php', {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+  const url = await res.text()
+  if (!url.startsWith('https://')) throw new Error(`Unexpected response: ${url}`)
+  return url.trim()
+}
+
+function isHttpUrl(url: string): boolean {
+  return /^https?:\/\/.+/.test(url.trim())
+}
 
 const UploadBox = styled(Flex, {
   width: '100%',
@@ -44,114 +66,123 @@ const VisualPreview = styled(Flex, {
   }
 })
 
+type UploadState = 'idle' | 'uploading' | 'done' | 'error'
+
 export function CultVisual() {
-  const [IsUploadBoxHovered, setIsUploadBoxHovered] = useState(false)
+  const [isUploadBoxHovered, setIsUploadBoxHovered] = useState(false)
   const [preview, setPreview] = useState<UploadedImage | null>(null)
   const [worseStatus, setWorseStatus] = useState<UploadedImageField<any>['status'] | null>(null)
+  const [urlInput, setUrlInput] = useState('')
+  const [uploadState, setUploadState] = useState<UploadState>('idle')
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
-  // form
   const { register } = useForm()
-
   const { ref: registerRef, ...rest } = register('visual')
 
-  // global state
   const setCultVisual = useSetCultVisual()
-
-  // upload logic
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const handleImageUpload = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
-      if (!file) {
-        return
-      }
+      if (!file || !file.type.startsWith('image/')) return
 
-      // Ensure it's an image
-      if (file.type.startsWith('image/')) {
-        // Get filename
-        const image = new Image()
-        const imageUrl = URL.createObjectURL(file)
+      setUploadError(null)
 
-        image.onload = () => {
-          const preview = {
-            url: imageUrl,
-            metadata: {
-              dimensions: parseFileDimensions(image.width, image.height),
-              size: parseFileSize(file.size),
-              type: parseFileType(file.type),
-            }
-          }
+      // Load image to get dimensions and validate
+      const imageUrl = URL.createObjectURL(file)
+      const image = new Image()
 
-          setPreview(preview)
-
-          // compute the worse status
-          const worseStatus = Object.values(preview.metadata).reduce<Status>((acc, { status }) => {
-            return STATUS_PRIORITY.indexOf(status) < STATUS_PRIORITY.indexOf(acc) ? status : acc
-          }, STATUS_PRIORITY[STATUS_PRIORITY.length - 1])
-
-          // save the worse status
-          setWorseStatus(worseStatus)
-
-          // compare it to the worse acceptable status and update the state accordingly
-          if (STATUS_PRIORITY.indexOf(worseStatus) >= STATUS_PRIORITY.indexOf(WORSE_ACCEPTABLE_STATUS)) {
-            setCultVisual(imageUrl)
-          }
+      image.onload = async () => {
+        const previewData: UploadedImage = {
+          url: imageUrl,
+          metadata: {
+            dimensions: parseFileDimensions(image.width, image.height),
+            size: parseFileSize(file.size),
+            type: parseFileType(file.type),
+          },
         }
 
-        image.src = imageUrl
+        setPreview(previewData)
+
+        const worse = Object.values(previewData.metadata).reduce<Status>((acc, { status }) => {
+          return STATUS_PRIORITY.indexOf(status) < STATUS_PRIORITY.indexOf(acc) ? status : acc
+        }, STATUS_PRIORITY[STATUS_PRIORITY.length - 1])
+
+        setWorseStatus(worse)
+
+        if (STATUS_PRIORITY.indexOf(worse) < STATUS_PRIORITY.indexOf(WORSE_ACCEPTABLE_STATUS)) {
+          // Image fails validation — don't upload
+          return
+        }
+
+        setUploadState('uploading')
+        try {
+          const hostedUrl = await uploadImage(file)
+          URL.revokeObjectURL(imageUrl)
+          setPreview((prev) => prev ? { ...prev, url: hostedUrl } : null)
+          setCultVisual(hostedUrl)
+          setUploadState('done')
+        } catch (err) {
+          setUploadState('error')
+          setUploadError('Upload failed. Paste an image URL below instead.')
+          // Still allow summoning with blob URL as fallback; image won't persist externally
+          setCultVisual(imageUrl)
+        }
       }
+
+      image.src = imageUrl
     },
     []
   )
 
-  // reset upload
+  const handleUrlChange = useCallback((url: string) => {
+    setUrlInput(url)
+    if (isHttpUrl(url)) {
+      if (preview?.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      setPreview(null)
+      setUploadState('idle')
+      setUploadError(null)
+      setCultVisual(url.trim())
+    } else {
+      setCultVisual(null)
+    }
+  }, [preview?.url, setCultVisual])
+
   const reset = useCallback(() => {
     setCultVisual(null)
-
-    if (preview?.url) {
-      URL.revokeObjectURL(preview.url)
-    }
-
-    // Reset the file input value
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-
+    setUrlInput('')
+    setUploadState('idle')
+    setUploadError(null)
+    if (preview?.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url)
+    if (fileInputRef.current) fileInputRef.current.value = ''
     setPreview(null)
-  }, [preview?.url])
+  }, [preview?.url, setCultVisual])
 
-  // image upload
   const onUploadImage = useCallback(() => {
     fileInputRef.current?.click()
   }, [])
 
-  // upload box dashed border
   const colors = useSigilColors()
-
   const uploadBoxStyles = useMemo(() => {
-    const encodedColor = encodeURIComponent(IsUploadBoxHovered ? colors.accent1Hovered.val : colors.borderColor.val)
-
+    const encodedColor = encodeURIComponent(isUploadBoxHovered ? colors.accent1Hovered.val : colors.borderColor.val)
     return { borderImageSource: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='${encodedColor}' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpolyline points='.5 6 .5 .5 6 .5'/%3E%3Cpolyline points='17.5 6 17.5 .5 12 .5'/%3E%3Cpolyline points='.5 12 .5 17.5 6 17.5'/%3E%3Cpolyline points='17.5 12 17.5 17.5 12 17.5'/%3E%3C/svg%3E")` }
-  }, [colors.borderColor.val, colors.accent1Hovered.val, IsUploadBoxHovered])
+  }, [colors.borderColor.val, colors.accent1Hovered.val, isUploadBoxHovered])
 
-  // upload box hover
   const uploadBoxRef = useRef(null)
-
   const onHoverStart = useCallback(() => setIsUploadBoxHovered(true), [])
   const onHoverEnd = useCallback(() => setIsUploadBoxHovered(false), [])
-
   useHover(uploadBoxRef, { onHoverStart, onHoverEnd })
 
-  // Preview styling
   const previewBoxRef = useRef(null)
-  const { height } = useResizeObserver({ ref: previewBoxRef})
+  const { height } = useResizeObserver({ ref: previewBoxRef })
 
   return (
-    <WindowCard title="Cult Visual" height={320} backgroundColor="$surface2">
-      <Flex flex={1}>
+    <WindowCard title="Cult Visual" backgroundColor="$surface2">
+      <Flex flex={1} gap="$gap16">
         {!!preview && (
-          <Flex ref={previewBoxRef} flex={1} flexDirection="row" gap="$gap32">
+          <Flex ref={previewBoxRef} flexDirection="row" gap="$gap32" minHeight={200}>
             <VisualPreview status={worseStatus ?? undefined} width={height} height={height}>
               <ImageComponent flex={1} src={preview.url} />
             </VisualPreview>
@@ -161,6 +192,22 @@ export function CultVisual() {
               <VisualDataField fieldName="size" formatter={formatFileSize} {...preview.metadata.size} />
               <VisualDataField fieldName="type" formatter={formatFileType} {...preview.metadata.type} />
 
+              {uploadState === 'uploading' && (
+                <Flex flexDirection="row" gap="$gap8" alignItems="center">
+                  <SpinningLoader size={14} />
+                  <Text variant="body3" color="$neutral2">Uploading image...</Text>
+                </Flex>
+              )}
+
+              {uploadState === 'done' && (
+                <Text variant="body3" color="$accent1">Image uploaded successfully.</Text>
+              )}
+
+              {uploadState === 'error' && (
+                <Text variant="body3" color="$statusCritical">{uploadError}</Text>
+              )}
+
+
               <Button theme="tertiary_Button" mt="auto" onPress={reset}>
                 <Text variant="body2">Reset</Text>
               </Button>
@@ -168,13 +215,35 @@ export function CultVisual() {
           </Flex>
         )}
 
-        <Flex display={preview ? 'none' : 'flex'} gap="$gap16" flex={1}>
-          <UploadBox ref={uploadBoxRef} onPress={onUploadImage} flex={1} style={uploadBoxStyles}>
+        {!preview && (
+          <UploadBox ref={uploadBoxRef} onPress={onUploadImage} height={120} style={uploadBoxStyles}>
             <Upload size={32} color="$accent1" />
           </UploadBox>
+        )}
 
-          <Text variant="body3" color="$neutral2" textAlign="center">Upload a square photo - PNG, JPG or GIF files only</Text>
+        <Flex gap="$gap8">
+          <Text variant="body3" color="$neutral2">Or paste an image URL</Text>
+          <TextInput
+            value={urlInput}
+            onChangeText={handleUrlChange}
+            placeholder="https://..."
+          />
+          {urlInput.length > 0 && !isHttpUrl(urlInput) && (
+            <Text variant="body3" color="$statusCritical">Must be a valid http(s) URL</Text>
+          )}
+          {urlInput.length > 0 && isHttpUrl(urlInput) && (
+            <Text variant="body3" color="$accent1">URL accepted.</Text>
+          )}
+          {uploadState === 'error' && (
+            <Text variant="body3" color="$statusCritical">{uploadError}</Text>
+          )}
         </Flex>
+
+        {!preview && (
+          <Text variant="body3" color="$neutral2" textAlign="center">
+            Upload a square photo — PNG, JPG or GIF files only
+          </Text>
+        )}
       </Flex>
 
       <input
@@ -186,10 +255,7 @@ export function CultVisual() {
         {...rest}
         onChange={handleImageUpload}
         accept="image/png, image/jpeg, image/gif"
-        style={{
-          visibility: 'hidden',
-          height: 0,
-        }}
+        style={{ visibility: 'hidden', height: 0 }}
       />
     </WindowCard>
   )

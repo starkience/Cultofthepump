@@ -84,10 +84,13 @@ export default defineConfig({
     },
   },
 
-  // ESLint and TypeScript checking
+  optimizeDeps: {
+    include: ['liveline'],
+  },
+
   server: {
     fs: {
-      strict: true,
+      strict: false,
     },
   },
 })

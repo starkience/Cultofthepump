@@ -6,6 +6,7 @@ interface SetCultDataParams {
   name: string | null
   symbol: string | null
   manifesto: string | null
+  snipingWei: string | null
 }
 
 interface SetAuctionPriceParams {
@@ -25,6 +26,7 @@ export interface SummonState {
   readonly name: string | null
   readonly symbol: string | null
   readonly manifesto: string | null
+  readonly snipingWei: string | null
   readonly visualUrl: string | null
   readonly strkBalance: string | null
 }
@@ -34,6 +36,7 @@ const initialState: SummonState = {
   name: null,
   symbol: null,
   manifesto: null,
+  snipingWei: null,
   visualUrl: null,
   strkBalance: null,
 }
@@ -46,6 +49,7 @@ const summonSlice = createSlice({
       state.name = action.payload.name
       state.symbol = action.payload.symbol
       state.manifesto = action.payload.manifesto
+      state.snipingWei = action.payload.snipingWei
     },
     setAuctionPrice(state, action: PayloadAction<SetAuctionPriceParams>) {
       state.auctionPrice = action.payload.price

@@ -39,16 +39,20 @@ const StyledClose = styled(Close, {
 export interface WindowCardProps extends FlexProps {
   title: string
   onClose?(): void
+  headerRight?: React.ReactNode
 }
 
-export function WindowCard({ title, children, onClose, ...props }: React.PropsWithChildren<WindowCardProps>) {
+export function WindowCard({ title, children, onClose, headerRight, ...props }: React.PropsWithChildren<WindowCardProps>) {
   const colors = useSigilColors()
 
   return (
     <Card {...props} boxShadow={`0px 8px 12px 6px ${opacify(20, colors.surface3.val)}, 0px 4px 4px ${opacify(10, colors.surface3.val)};`}>
       <CardHeader>
         <Text variant="body2" fontWeight="$medium">{title}</Text>
-        {!!onClose && <StyledClose onPress={onClose} />}
+        <Flex flexDirection="row" alignItems="center" gap="$gap8">
+          {headerRight}
+          {!!onClose && <StyledClose onPress={onClose} />}
+        </Flex>
       </CardHeader>
 
       <Flex flex={1} p="$padding32">{children}</Flex>

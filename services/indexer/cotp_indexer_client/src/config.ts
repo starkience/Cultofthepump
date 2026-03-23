@@ -1,0 +1,8 @@
+const DEFAULT_GRAPHQL_URL = 'http://127.0.0.1:8080/v1/graphql'
+const DEFAULT_WS_URL = 'ws://127.0.0.1:8080/v1/graphql'
+
+export const INDEXER_GRAPHQL_URL =
+  process.env.REACT_APP_COTP_INDEXER_GRAPHQL_URL || DEFAULT_GRAPHQL_URL
+
+export const INDEXER_WS_URL =
+  process.env.REACT_APP_COTP_INDEXER_WS_URL || DEFAULT_WS_URL

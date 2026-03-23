@@ -6,6 +6,7 @@ import Landing from 'pages/Landing'
 
 const NotFound = lazy(() => import('pages/NotFound'))
 const Summoner = lazy(() => import('pages/Summon'))
+const TradePage = lazy(() => import('pages/Trade'))
 
 // SEO titles and descriptions sourced from <TODO create a google doc for that>
 // getTitle and getDescription are used as static metatags for SEO. Dynamic metatags should be set in the page component itself
@@ -14,6 +15,8 @@ const StaticTitlesAndDescriptions = {
   COTPDescription: 'Leftcurve is a cult factory on Starknet.',
   SummonerTitle: 'Create a cult on Starknet',
   SummonerDescription: 'Create your own cult on Starknet.',
+  TradeTitle: 'Trade Starknet cults',
+  TradeDescription: 'Browse live cults and inspect recent Starknet launch activity.',
 }
 
 export interface RouteDefinition {
@@ -49,6 +52,13 @@ export const routes: RouteDefinition[] = [
     getElement: () => <Summoner />,
     getTitle: () => StaticTitlesAndDescriptions.SummonerTitle,
     getDescription: () => StaticTitlesAndDescriptions.SummonerDescription,
+  }),
+  createRouteDefinition({
+    path: '/trade',
+    nestedPaths: [':address'],
+    getElement: () => <TradePage />,
+    getTitle: () => StaticTitlesAndDescriptions.TradeTitle,
+    getDescription: () => StaticTitlesAndDescriptions.TradeDescription,
   }),
   createRouteDefinition({ path: '*', getElement: () => <Navigate to="/not-found" replace /> }),
   createRouteDefinition({ path: '/not-found', getElement: () => <NotFound /> }),

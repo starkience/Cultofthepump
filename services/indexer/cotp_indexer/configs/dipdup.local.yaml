@@ -1,0 +1,55 @@
+database:
+  kind: postgres
+  host: localhost
+  port: 5432
+  user: dipdup
+  password: dipdup
+  database: dipdup
+
+datasources:
+  node:
+    kind: starknet.node
+    url: 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/6e6ntRee9DYgQFYqVffLB'
+    http:
+      ratelimit_rate: 3
+      ratelimit_period: 1
+      ratelimit_sleep: 1
+
+contracts:
+  factory:
+    kind: starknet
+    address: '0x135abb443cbba9738fe63d55a06810fdf14b605ddc5262220a889411baede25'
+    typename: factory
+  swap:
+    kind: starknet
+    address: '0x7a6c0500a1596c0a501156ba660c84c461a599053ab96319d61dfc2626a45b9'
+    typename: swap
+
+indexes:
+  factory_events:
+    kind: starknet.events
+    first_level: 7989768
+    datasources:
+      - node
+    handlers:
+      - callback: on_token_launched
+        contract: factory
+        name: ShitcoinLaunched
+  swap_events:
+    kind: starknet.events
+    first_level: 7989768
+    datasources:
+      - node
+    handlers:
+      - callback: on_token_bought
+        contract: swap
+        name: TokenBought
+      - callback: on_token_sold
+        contract: swap
+        name: TokenSold
+      - callback: on_strk_price_updated
+        contract: swap
+        name: StrkPriceUpdated
+      - callback: on_pool_launched
+        contract: swap
+        name: PoolLaunched

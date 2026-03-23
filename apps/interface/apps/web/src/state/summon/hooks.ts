@@ -44,6 +44,7 @@ export function useCultData() {
     name: state.summon.name,
     symbol: state.summon.symbol,
     manifesto: state.summon.manifesto,
+    snipingWei: state.summon.snipingWei,
   }))
 }
 
@@ -57,17 +58,17 @@ export function useCultVisual() {
 
 // CULT DATA
 
-export function useSetCultData(): (name: string, symbol: string, manifesto: string) => void {
+export function useSetCultData(): (name: string, symbol: string, manifesto: string, snipingWei: string | null) => void {
   const dispatch = useAppDispatch()
-  return useCallback((name: string, symbol: string, manifesto: string) => {
-    dispatch(setCultData({ name, symbol, manifesto }))
+  return useCallback((name: string, symbol: string, manifesto: string, snipingWei: string | null) => {
+    dispatch(setCultData({ name, symbol, manifesto, snipingWei }))
   }, [dispatch])
 }
 
 export function useCleanCultData(): () => void {
   const dispatch = useAppDispatch()
   return useCallback(() => {
-    dispatch(setCultData({ name: null, symbol: null, manifesto: null }))
+    dispatch(setCultData({ name: null, symbol: null, manifesto: null, snipingWei: null }))
   }, [dispatch])
 }
 
