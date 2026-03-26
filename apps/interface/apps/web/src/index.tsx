@@ -12,6 +12,7 @@ import store from 'state'
 import { TamaguiProvider } from 'theme/tamaguiProvider'
 import { getCanonicalUrl } from 'utils/urlRoutes'
 import { StarknetProvider } from 'components/Web3Provider/StarknetProvider'
+import { PrivyWalletProvider } from 'components/PrivyConnect'
 import { SharedQueryClient } from 'cotp/src/data/apiClients/SharedQueryClient'
 
 function Updaters() {
@@ -33,14 +34,16 @@ createRoot(container).render(
     <HelmetProvider>
       <Provider store={store}>
         <QueryClientProvider client={SharedQueryClient}>
-          <Router>
-            <StarknetProvider>
-              <Updaters />
-              <TamaguiProvider>
-                <App />
-              </TamaguiProvider>
-            </StarknetProvider>
-          </Router>
+          <PrivyWalletProvider>
+            <Router>
+              <StarknetProvider>
+                <Updaters />
+                <TamaguiProvider>
+                  <App />
+                </TamaguiProvider>
+              </StarknetProvider>
+            </Router>
+          </PrivyWalletProvider>
         </QueryClientProvider>
       </Provider>
     </HelmetProvider>

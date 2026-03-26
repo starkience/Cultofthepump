@@ -12,3 +12,12 @@ type Token struct {
 	CreatedBy       string `json:"createdBy"`
 	TransactionHash string `json:"transactionHash"`
 }
+
+type Prophecy struct {
+	ID           int    `json:"id"`
+	TokenAddress string `json:"tokenAddress"`
+	Wallet       string `json:"wallet"`
+	Message      string `json:"message"`
+	Signature    string `json:"signature"`
+	CreatedAt    string `json:"createdAt"`
+}

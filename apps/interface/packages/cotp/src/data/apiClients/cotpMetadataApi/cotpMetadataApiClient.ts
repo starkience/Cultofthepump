@@ -81,6 +81,41 @@ export function useCultMetadata({
   })
 }
 
+export interface ProphecyRecord {
+  id: number
+  tokenAddress: string
+  wallet: string
+  message: string
+  signature: string
+  createdAt: string
+}
+
+export async function fetchProphecies(tokenAddress: string): Promise<ProphecyRecord[]> {
+  return await cotpMetadataApiClient.get<ProphecyRecord[]>('/prophecy', {
+    params: { address: tokenAddress.toLowerCase() },
+  })
+}
+
+export async function createProphecy(payload: {
+  tokenAddress: string
+  wallet: string
+  message: string
+  signature: string
+}): Promise<{ status: string }> {
+  return await cotpMetadataApiClient.post<{ status: string }>('/prophecy', {
+    body: JSON.stringify(payload),
+  })
+}
+
+export function useProphecies(tokenAddress: string | null | undefined) {
+  return useQuery<ProphecyRecord[]>({
+    queryKey: [COTP_METADATA_API_CACHE_KEY, 'prophecy', tokenAddress],
+    enabled: Boolean(tokenAddress),
+    queryFn: () => fetchProphecies(tokenAddress!),
+    refetchInterval: 10_000,
+  })
+}
+
 export function joinCultMetadataByAddress<
   TToken extends { contractAddress?: string | null; address?: string | null }
 >(tokens: TToken[], metadata: CultMetadataRecord[]): JoinedCultRecord<TToken>[] {

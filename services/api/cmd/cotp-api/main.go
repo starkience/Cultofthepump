@@ -25,6 +25,10 @@ func main() {
 	}).Methods("GET")
 	r.HandleFunc("/tokens", handlers.TokensFetch).Methods("GET", "OPTIONS")
 	r.HandleFunc("/tokens", handlers.TokensCreate).Methods("POST", "OPTIONS")
+	r.HandleFunc("/prophecy", handlers.ProphecyFetch).Methods("GET", "OPTIONS")
+	r.HandleFunc("/prophecy", handlers.ProphecyCreate).Methods("POST", "OPTIONS")
+	r.HandleFunc("/upload-image", handlers.UploadImage).Methods("POST", "OPTIONS")
+	r.HandleFunc("/ws/chat", handlers.ChatWS)
 
 	port := os.Getenv("PORT")
 	if port == "" {

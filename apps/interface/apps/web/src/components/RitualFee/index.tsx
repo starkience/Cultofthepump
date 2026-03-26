@@ -1,182 +1,183 @@
 import { WindowCard } from 'components/Card/WindowCard'
-import { Flex, SpinningLoader, styled, Text } from 'ui/src'
+import { Button, Flex, SpinningLoader, Text } from 'ui/src'
 import { Background } from './Background'
-import { ProgressBar } from './ProgressBar'
 import { useSetAuctionPrice } from 'state/summon/hooks'
-import { useEffect, useMemo } from 'react'
-import { useCurrentAuction } from 'cotp/src/features/auction/api'
-import moment from 'moment'
-import { useNow } from 'utilities/src/react/hooks/useNow'
-import { useAccount } from '@starknet-react/core'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCurrentAuction, AuctionTimerData } from 'cotp/src/features/auction/api'
+import { useBlock } from '@starknet-react/core'
+import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { usePrivyExecute } from 'hooks/usePrivyExecute'
+import { DutchAuctionABI, DUTCH_AUCTION_ADDRESS } from 'cotp/src/constants/contracts'
+import { CallData } from 'starknet'
 
-const DateComponent = styled(Text, {
-  variant: 'body1',
-  fontSize: 20,
-  color: '$accent1',
-  fontWeight: '$bold',
-})
+const WEI = 10n ** 18n
 
-const Amount = styled(Text, {
-  variant: 'body2',
-})
+function formatCountdown(secondsLeft: number): string {
+  if (secondsLeft <= 0) return 'Expired'
+  const h = Math.floor(secondsLeft / 3600)
+  const m = Math.floor((secondsLeft % 3600) / 60)
+  const s = secondsLeft % 60
+  if (h > 0) return `${h}h ${m}m ${s}s`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
 
-const DATE_FORMAT = 'DD/MM - HH:mm'
-const NEXT_AUCTION_FORMAT = 'HH:mm:ss'
+function computeLivePrice(timer: AuctionTimerData, nowSeconds: number): number {
+  const elapsed = Math.max(0, nowSeconds - timer.startTimestamp)
+  const fraction = Math.min(1, elapsed / timer.duration)
+  const start = Number(timer.startPriceWei) / Number(WEI)
+  const end = Number(timer.endPriceWei) / Number(WEI)
+  return start - (start - end) * fraction
+}
+
+function AuctionCountdown({ timer }: { timer: AuctionTimerData }) {
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setNow(Math.floor(Date.now() / 1000))
+    }, 1000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [])
+
+  const secondsLeft = Math.max(0, timer.endTimestamp - now)
+  const livePrice = computeLivePrice(timer, now)
+  const endPrice = Number(timer.endPriceWei) / Number(WEI)
+
+  // Progress through the auction (0 = just started, 1 = expired)
+  const elapsed = Math.max(0, now - timer.startTimestamp)
+  const progress = Math.min(100, (elapsed / timer.duration) * 100)
+
+  return (
+    <Flex gap="$gap12" width="100%">
+      <Flex alignItems="center" gap="$gap4">
+        <Text variant="heading1">{livePrice.toFixed(4)} STRK</Text>
+        <Text variant="body3" color="$neutral2">CURRENT RITUAL FEE</Text>
+      </Flex>
+
+      {/* Decay progress bar */}
+      <Flex width="100%" gap="$gap4">
+        <Flex
+          width="100%"
+          height={4}
+          backgroundColor="$surface3"
+          borderRadius={2}
+          overflow="hidden"
+        >
+          <Flex
+            height="100%"
+            borderRadius={2}
+            backgroundColor="$accent1"
+            style={{ width: `${100 - progress}%`, transition: 'width 1s linear' }}
+          />
+        </Flex>
+        <Flex flexDirection="row" justifyContent="space-between">
+          <Text variant="body3" color="$neutral2">Floor: {endPrice.toFixed(2)} STRK</Text>
+          <Text variant="body3" color={secondsLeft < 300 ? '$statusCritical' : '$neutral2'}>
+            Expires in {formatCountdown(secondsLeft)}
+          </Text>
+        </Flex>
+      </Flex>
+
+      <Text variant="body3" color="$neutral2" textAlign="center">
+        Price decays linearly to the floor. Each launch doubles the next start price.
+      </Text>
+    </Flex>
+  )
+}
 
 export function RitualFee() {
-  const now = useNow()
-
-  const { address } = useAccount()
-
-  // get current auction data
-  const { data } = useCurrentAuction()
-
-  // global state setters
+  const { wallet } = useStarknetWallet()
+  const address = wallet?.address
+  const { data: auctionData, isLoading, error } = useCurrentAuction()
   const setAuctionPrice = useSetAuctionPrice()
 
-  // parse current auction data
-  const parsedData = useMemo(() => {
-    if (!data) return null
+  // Default price (10 STRK) used when no active auction — create_auction is always
+  // called in the multicall, so we just need a price estimate for validation/display.
+  const DEFAULT_PRICE = '10000000000000000000'
 
-    const nextStartTime = data.startTime + data.duration
-
-    if (data.isRunning) {
-      return {
-        isRunning: data.isRunning,
-        price: data.price.toFixed(2, { groupSeparator: ',' }),
-        duration: data.duration,
-        startTime: data.startTime,
-        nextStartTime,
-        bounds: {
-          start: {
-            price: data.startPrice.toFixed(2, { groupSeparator: ',' }),
-            date: moment(data.startTime).format(DATE_FORMAT),
-          },
-          end: {
-            price: data.endPrice.toFixed(2, { groupSeparator: ',' }),
-            date: moment(data.startTime + data.duration).format(DATE_FORMAT),
-          },
-        },
-      } as const
-    } else {
-      return {
-        isRunning: data.isRunning,
-        nextStartTime,
-        previousBid: data.bid.toFixed(2, { groupSeparator: ',' }),
-      } as const
-    }
-  }, [data, now])
-
-  // progress bar
-  const progress = useMemo(() => {
-    if (!parsedData?.isRunning) return 0
-
-    const progress = Math.trunc(((now - parsedData.startTime) / (parsedData.nextStartTime - parsedData.startTime)) * 100)
-
-    if (progress < 0) return 0
-    if (progress > 100) return 100
-
-    return progress
-  }, [data, now])
-
-  // check if a new ritual is being prepared
-  const isPreparingNewRitual = useMemo(
-    () => parsedData && parsedData.nextStartTime <= now,
-    [parsedData?.nextStartTime, now]
-  )
-
-  // time before next auction
-  const timeBeforeNextAuction = useMemo(() => {
-    if (!parsedData) return 0
-
-    return moment.utc(parsedData.nextStartTime - now).format(NEXT_AUCTION_FORMAT)
-  }, [parsedData, now])
-
-  // update auction price
   useEffect(() => {
-    if (!isPreparingNewRitual && data?.isRunning) {
-      setAuctionPrice(data.price.quotient.toString())
-    } else {
-      setAuctionPrice(null)
+    if (auctionData?.isRunning && auctionData.price) {
+      setAuctionPrice(auctionData.price.quotient.toString())
+    } else if (!isLoading) {
+      // Auction expired or not running — set default so the form stays unblocked.
+      // The multicall always calls create_auction before bid, so this is safe.
+      setAuctionPrice(DEFAULT_PRICE)
     }
-  }, [data?.price, isPreparingNewRitual])
+  }, [auctionData?.isRunning, auctionData?.price?.quotient.toString(), isLoading])
 
-  // React content
-  const content = useMemo(() => {
-    if (!address) {
-      return (
-        <Flex alignItems="center" justifyContent="center" flex={1} gap="$gap32">
-          <Text textAlign="center">Wallet not connected</Text>
+  const { data: block } = useBlock({ blockIdentifier: 'latest' })
+  const restartCalls = useMemo(() => block ? [
+    {
+      contractAddress: DUTCH_AUCTION_ADDRESS,
+      entrypoint: 'create_auction',
+      calldata: CallData.compile({
+        start_time: (block.timestamp - 10).toString(),
+        start_price: { low: '0', high: '0' },
+      }),
+    },
+  ] : undefined, [block?.timestamp])
+  const { execute: sendRestart, status: restartStatus } = usePrivyExecute()
+  const isRestarting = restartStatus === 'pending'
+
+  if (!address) {
+    return (
+      <WindowCard title="Ritual Fee" minHeight={200}>
+        <Flex alignItems="center" justifyContent="center" flex={1}>
+          <Text variant="body2" color="$neutral2">Wallet not connected</Text>
         </Flex>
-      )
-    }
+      </WindowCard>
+    )
+  }
 
-    if (!parsedData) {
-      return (
+  if (isLoading) {
+    return (
+      <WindowCard title="Ritual Fee" minHeight={200}>
         <Flex alignItems="center" justifyContent="center" flex={1}>
           <SpinningLoader size={32} />
         </Flex>
-      )
-    }
-
-    if (isPreparingNewRitual) {
-      return (
-        <Flex alignItems="center" justifyContent="center" flex={1} gap="$gap16">
-          <Text textAlign="center">
-            A new ritual is being prepared,<br />please wait <Text fontWeight="$bold">a few seconds</Text>
-          </Text>
-
-          <SpinningLoader size={32} />
-        </Flex>
-      )
-    }
-
-    if (parsedData.isRunning) {
-      return (
-        <>
-          <Flex alignItems="center" gap="$gap4">
-            <Text variant="heading1">{parsedData.price} STRK</Text>
-            <Text variant="body3" color="$neutral2">CURRENT RITUAL FEE</Text>
-          </Flex>
-
-          <ProgressBar progress={progress} />
-
-          <Flex flexDirection="row" justifyContent="space-between" alignItems="center" px="$padding32">
-            <Flex alignItems="center" gap="$gap8">
-              <DateComponent>{parsedData.bounds.start.date}</DateComponent>
-              <Amount>{parsedData.bounds.start.price} STRK</Amount>
-            </Flex>
-
-            <Text variant="body2" color="$neutral2" fontWeight="$bold">-&gt;</Text>
-
-            <Flex alignItems="center" gap="$gap8">
-              <DateComponent>{parsedData.bounds.end.date}</DateComponent>
-              <Amount>{parsedData.bounds.end.price} STRK</Amount>
-            </Flex>
-          </Flex>
-        </>
-      )
-    }
-
-    return (
-      <Flex alignItems="center" justifyContent="center" flex={1} gap="$gap32">
-        <Flex alignItems="center" gap="$gap4">
-          <Text variant="heading1">{timeBeforeNextAuction}</Text>
-          <Text variant="body3" color="$neutral2">UNTIL NEXT RITUAL</Text>
-        </Flex>
-
-        <Text textAlign="center">
-          The last cult has been summoned for <Text fontWeight="$bold" color="$accent1">{parsedData.previousBid} STRK</Text>
-        </Text>
-      </Flex>
+      </WindowCard>
     )
-  }, [parsedData, isPreparingNewRitual])
+  }
+
+  if (!auctionData?.isRunning) {
+    return (
+      <WindowCard title="Ritual Fee" minHeight={200}>
+        <Background active={false} />
+        <Flex alignItems="center" justifyContent="center" flex={1} gap="$gap16">
+          <Flex gap="$gap8" alignItems="center">
+            <Text variant="body2" color="$neutral2" textAlign="center">No auction currently running.</Text>
+            <Text variant="body3" color="$neutral2" textAlign="center">
+              Anyone can restart the auction to begin a new ritual cycle.
+            </Text>
+          </Flex>
+          <Button
+            theme="primary"
+            onPress={() => restartCalls && void sendRestart(restartCalls)}
+            disabled={isRestarting || !block}
+          >
+            {isRestarting ? <SpinningLoader size={16} /> : <Text variant="body2">Restart Auction</Text>}
+          </Button>
+        </Flex>
+      </WindowCard>
+    )
+  }
 
   return (
-    <WindowCard title="Ritual Fee" minHeight={300}>
-      <Background active={(parsedData?.isRunning ?? false) && !isPreparingNewRitual} />
-      <Flex gap="$gap32" flex={1}>
-        {content}
+    <WindowCard title="Ritual Fee" minHeight={200}>
+      <Background active />
+      <Flex gap="$gap16" flex={1} alignItems="center" justifyContent="center">
+        {auctionData.timer ? (
+          <AuctionCountdown timer={auctionData.timer} />
+        ) : (
+          <Flex alignItems="center" gap="$gap4">
+            <Text variant="heading1">{auctionData.price?.toFixed(4) ?? '—'} STRK</Text>
+            <Text variant="body3" color="$neutral2">CURRENT RITUAL FEE</Text>
+          </Flex>
+        )}
       </Flex>
     </WindowCard>
   )

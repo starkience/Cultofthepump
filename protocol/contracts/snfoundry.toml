@@ -1,15 +1,11 @@
-# Visit https://foundry-rs.github.io/starknet-foundry/appendix/snfoundry-toml.html for more information
-
-# [sncast.myprofile1]                                    # Define a profile name
-# url = "http://127.0.0.1:5050/"                         # Url of the RPC provider
-# accounts_file = "../account-file"                      # Path to the file with the account data
-# account = "mainuser"                                   # Account from `accounts_file` or default account file that will be used for the transactions
-# keystore = "~/keystore"                                # Path to the keystore file
-# wait_params = { timeout = 500, retry_interval = 10 }   # Wait for submitted transaction parameters
-# block_explorer = "StarkScan"                           # Block explorer service used to display links to transaction details
-
 [sncast.default]
-account = "account"
-url = "https://free-rpc.nethermind.io/sepolia-juno/v0_7"
+account = "$STARKNET_ACCOUNT"
+url = "$STARKNET_SEPOLIA_RPC_URL"
+block_explorer = "Voyager"
+show-explorer-links = true
+
+[sncast.sepolia]
+account = "$STARKNET_ACCOUNT"
+url = "$STARKNET_SEPOLIA_RPC_URL"
 block_explorer = "Voyager"
 show-explorer-links = true

@@ -1,30 +1,21 @@
 import { nethermindRpcProviders, SUPPORTED_STARKNET_NETWORKS } from 'cotp/src/constants/networks'
-import { publicProvider, StarknetConfig, starkscan } from '@starknet-react/core'
-import { ArgentMobileConnector } from 'starknetkit/argentMobile'
-import { InjectedConnector } from 'starknetkit/injected'
-import { WebWalletConnector } from 'starknetkit/webwallet'
+import { publicProvider, StarknetConfig, voyager } from '@starknet-react/core'
 import { SharedQueryClient } from 'cotp/src/data/apiClients/SharedQueryClient'
 
 interface StarknetProviderProps {
   children: React.ReactNode
 }
 
+// No wallet connectors — all txs go through the Privy embedded wallet service.
+// StarknetConfig is kept for read-only hooks: useReadContract, useBlock, useTransactionReceipt, useExplorer.
 export function StarknetProvider({ children }: StarknetProviderProps) {
-  const connectors = [
-    new InjectedConnector({ options: { id: 'argentX', name: 'Argent' } }),
-    new InjectedConnector({ options: { id: 'braavos', name: 'Braavos' } }),
-    new WebWalletConnector({ url: 'https://web.argent.xyz' }),
-    new ArgentMobileConnector(),
-  ]
-
   return (
     <StarknetConfig
       queryClient={SharedQueryClient}
-      connectors={connectors}
+      connectors={[]}
       chains={SUPPORTED_STARKNET_NETWORKS}
       provider={nethermindRpcProviders}
-      explorer={starkscan}
-      autoConnect
+      explorer={voyager}
     >
       {children}
     </StarknetConfig>

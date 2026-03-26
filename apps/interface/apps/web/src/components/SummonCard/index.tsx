@@ -5,7 +5,7 @@ import { useAuctionPrice, useCultData, useIsValidSummonSteps } from 'state/summo
 import { Rune } from './Rune'
 import { useCallback, useEffect, useMemo } from 'react'
 import { SIDED_STEPS } from 'pages/Summon/CardsHelpers'
-import { useSendTransaction, useBlock } from '@starknet-react/core'
+import { useBlock } from '@starknet-react/core'
 import { STRK_SEPOLIA } from 'cotp/src/constants/tokens'
 import { Token } from 'cotp/src/features/entities/token'
 import { useToken, useDutchAuction } from 'cotp/src/hooks/useContract'
@@ -54,7 +54,9 @@ export function SummonCard(props: FlexProps) {
       const END_PRICE = BigInt('10000000000000000000') // 10 STRK — deployed end_price
       const totalApprove = (END_PRICE + snipingBig).toString()
       return [
-        dutchAuction.populate('create_auction', [(block.timestamp - 10).toString(), { low: '0', high: '0' }]),
+        // start_price must be >= end_price (10 STRK) to avoid u256_sub overflow in create_auction.
+        // Setting start_price = end_price produces a constant-price auction at exactly 10 STRK.
+        dutchAuction.populate('create_auction', [(block.timestamp - 10).toString(), { low: END_PRICE.toString(), high: '0' }]),
         strk.populate('approve', [dutchAuction.address, totalApprove]),
         dutchAuction.populate('bid', [name, symbol, { low: sniping, high: '0' }]),
       ]

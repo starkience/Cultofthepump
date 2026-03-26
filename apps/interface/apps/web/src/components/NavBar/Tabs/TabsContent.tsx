@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import { Crown, Rage, Stake, Summon, Trade } from 'ui/src/components/icons'
+import { Crown, MessageDots, Summon, Trade } from 'ui/src/components/icons'
 
 export type TabsSection = {
   title: string
@@ -25,18 +25,16 @@ export const useTabsContent = (): TabsSection[] => {
       icon: () => <Summon size={28} />,
     },
     {
+      title: 'The Pulse',
+      href: '/feed',
+      isActive: pathname.startsWith('/feed'),
+      icon: () => <MessageDots size={20} />,
+    },
+    {
       title: 'Leaderboard',
       href: '/leaderboard',
-      isActive: pathname.startsWith('/trade'),
+      isActive: pathname.startsWith('/leaderboard'),
       icon: () => <Crown size={22} />,
-    },
-    {
-      title: 'Stake',
-      icon: () => <Stake size={22} />,
-    },
-    {
-      title: '$RAGE',
-      icon: () => <Rage size={28} />,
     }
   ]
 }

@@ -4,17 +4,48 @@ Smart contracts for Cult of the Pump project.
 
 ## Installation
 
-Requires Scarb 2.13.1 and Starknet Foundry 0.58.0.
+Requires Scarb 2.16.1 and Starknet Foundry 0.58.0.
+Contracts are pinned to the Starknet/Cairo 2.13.2 line, which is the latest Cairo line supported by Starknet 0.14.1 / RPC 0.10.
+
+## Local verification
+
+```sh
+scarb build
+snforge test --package contracts
+```
 
 ## Deployment
 
 ### Sepolia
 
-Make sure you have a Sepolia testnet account with enough ETH and STRK (see [instructions](https://github.com/m-kus/cairo-quickstart?tab=readme-ov-file#create-testnet-account)), update `snfoundry.toml` to change account name or RPC endpoint if necessary.
+The previous Cairo deploy script is deprecated for live deployments. Use the manifest-driven shell wrapper instead so deployment inputs stay outside the source tree.
 
 ```sh
-sncast script run --package scripts deploy
+cp deployments/sepolia.template.json deployments/sepolia.local.json
+# edit owner / treasury and, if needed, dependency addresses
+
+export STARKNET_ACCOUNT="<your-sncast-account-alias>"
+export STARKNET_SEPOLIA_RPC_URL="<your-sepolia-rpc-url>"
+
+./scripts/deploy/sepolia.sh \
+  --config deployments/sepolia.local.json \
+  --output deployments/runs/sepolia-$(date +%Y%m%d-%H%M%S).json
 ```
+
+The deployment wrapper:
+- declares `bonding_curve`, `swap`, `erc20`, `factory`, and `dutch_auction`
+- deploys the contracts in dependency order
+- configures `swap.set_factory` and `factory.set_dutch_auction`
+- writes a deployment manifest with class hashes, contract addresses, and transaction hashes
+
+### What I need from you for the real Sepolia deploy
+
+- A funded Sepolia account alias available to `sncast`
+- A working Sepolia RPC URL
+- The owner address
+- The treasury address
+
+The owner and treasury can temporarily be the same address for Sepolia, but they are separate config values now.
 
 ## Contracts
 

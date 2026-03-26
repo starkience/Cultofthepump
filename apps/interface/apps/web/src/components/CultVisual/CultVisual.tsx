@@ -11,21 +11,20 @@ import { Status, UploadedImage, UploadedImageField } from 'components/CultVisual
 import { VisualDataField } from 'components/CultVisual/VisualDataField'
 import { useSetCultVisual } from 'state/summon/hooks'
 
-// Upload to catbox.moe — free, no auth, permanent hosting
+// Upload via the metadata API proxy → catbox.moe (avoids CORS)
 async function uploadImage(file: File): Promise<string> {
   const formData = new FormData()
-  formData.append('reqtype', 'fileupload')
-  formData.append('fileToUpload', file)
+  formData.append('file', file)
 
-  const res = await fetch('https://catbox.moe/user/api.php', {
+  const res = await fetch('http://localhost:8080/upload-image', {
     method: 'POST',
     body: formData,
   })
 
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-  const url = await res.text()
-  if (!url.startsWith('https://')) throw new Error(`Unexpected response: ${url}`)
-  return url.trim()
+  const { url } = await res.json()
+  if (!url?.startsWith('https://')) throw new Error(`Unexpected response: ${url}`)
+  return url
 }
 
 function isHttpUrl(url: string): boolean {

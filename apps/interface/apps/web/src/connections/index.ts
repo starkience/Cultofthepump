@@ -1,8 +1,6 @@
 import ARGENT_X_ICON from 'assets/wallets/argent-x.svg?react'
-import ARGENT_MOBILE_ICON from 'assets/wallets/argent-mobile.svg?react'
 import BRAAVOS_ICON from 'assets/wallets/braavos.svg?react'
 import WEB_WALLET_ICON from 'assets/wallets/web-wallet.svg?react'
-import { ArgentMobileConnector } from 'starknetkit/argentMobile'
 import { InjectedConnector } from 'starknetkit/injected'
 import { WebWalletConnector } from 'starknetkit/webwallet'
 import ReactComponent from '*.svg?react'
@@ -14,12 +12,11 @@ enum ConnectionType {
   ARGENT_X = 'ARGENT_X',
   BRAAVOS = 'BRAAVOS',
   WEBWALLET = 'WEBWALLET',
-  ARGENTMOBILE = 'ARGENTMOBILE',
 }
 
 export interface L2Connection {
   getName(): string
-  connector: InjectedConnector | ArgentMobileConnector | WebWalletConnector
+  connector: InjectedConnector | WebWalletConnector
   type: ConnectionType
   getIcon: typeof ReactComponent
   shouldDisplay(): boolean
@@ -80,20 +77,8 @@ const webWalletConnection: L2Connection = {
   shouldDisplay: () => true,
 }
 
-// ARGENT MOBILE
-
-const argentMobile = new ArgentMobileConnector()
-
-const argentMobileConnection: L2Connection = {
-  getName: () => 'Argent (mobile)',
-  connector: argentMobile,
-  type: ConnectionType.ARGENTMOBILE,
-  getIcon: ARGENT_MOBILE_ICON,
-  shouldDisplay: () => true,
-}
-
 // GETTERS
 
 export function getL2Connections() {
-  return [argentXWalletConnection, braavosWalletConnection, webWalletConnection, argentMobileConnection]
+  return [argentXWalletConnection, braavosWalletConnection, webWalletConnection]
 }

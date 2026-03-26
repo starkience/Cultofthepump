@@ -68,6 +68,30 @@ func GetTokens(network string, address string) (payload []byte, err error) {
 	return json.Marshal(tokens)
 }
 
+func GetProphecies(tokenAddress string) ([]Prophecy, error) {
+	rows, err := db.Query(
+		`SELECT id, token_address, wallet, message, COALESCE(signature, ''), created_at FROM prophecy WHERE token_address = $1 ORDER BY id DESC`,
+		strings.ToLower(tokenAddress),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Prophecy
+	for rows.Next() {
+		var p Prophecy
+		if err := rows.Scan(&p.ID, &p.TokenAddress, &p.Wallet, &p.Message, &p.Signature, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	if out == nil {
+		return []Prophecy{}, nil
+	}
+	return out, rows.Err()
+}
+
 func GetToken(network string, address string) (*Token, error) {
 	q := `select token_id, name, symbol, address, description, image_url, manifesto, network, created_by, transaction_hash
 		from tokens

@@ -1,1 +1,4 @@
 archive/import-snapshots/
+protocol/contracts/deployments/runs/
+protocol/contracts/deployments/*.local.json
+apps/interface/apps/web/.env

@@ -12,13 +12,12 @@ import { SummonStepKey } from 'pages/Summon/types'
 // VALIDATION
 
 export function useIsValidSummonSteps(): (cardKey: SummonStepKey) => boolean {
-  const state = useAppSelector((state: InterfaceState) => ({
-    auctionPrice: state.summon.auctionPrice,
-    name: state.summon.name,
-    symbol: state.summon.symbol,
-    visualUrl: state.summon.visualUrl,
-    strkBalance: state.summon.strkBalance,
-  }))
+  const auctionPrice = useAppSelector((s: InterfaceState) => s.summon.auctionPrice)
+  const name = useAppSelector((s: InterfaceState) => s.summon.name)
+  const symbol = useAppSelector((s: InterfaceState) => s.summon.symbol)
+  const visualUrl = useAppSelector((s: InterfaceState) => s.summon.visualUrl)
+  const strkBalance = useAppSelector((s: InterfaceState) => s.summon.strkBalance)
+  const state = { auctionPrice, name, symbol, visualUrl, strkBalance }
 
   return useCallback((stepKey: SummonStepKey) => {
     switch (stepKey) {

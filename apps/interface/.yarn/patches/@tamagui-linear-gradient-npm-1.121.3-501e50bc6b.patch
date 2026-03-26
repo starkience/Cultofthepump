@@ -1,0 +1,69 @@
+diff --git a/src/linear-gradient.tsx b/src/linear-gradient.tsx
+index 126f70252eb8919fb177a5fb3ddcc41878e13b33..d8664f3be7482cdf9380cf57e5a3cb4dcd16bbd5 100644
+--- a/src/linear-gradient.tsx
++++ b/src/linear-gradient.tsx
+@@ -82,21 +82,25 @@ function calculatePseudoAngle(
+   startPoint?: LinearGradientPoint | null,
+   endPoint?: LinearGradientPoint | null
+ ) {
+-  const getControlPoints = (): LinearGradientPoint[] => {
+-    let correctedStartPoint: LinearGradientPoint = [0, 0]
+-    if (Array.isArray(startPoint)) {
+-      correctedStartPoint = [
+-        startPoint[0] != null ? startPoint[0] : 0.0,
+-        startPoint[1] != null ? startPoint[1] : 0.0,
+-      ]
+-    }
+-    let correctedEndPoint: LinearGradientPoint = [0.0, 1.0]
+-    if (Array.isArray(endPoint)) {
+-      correctedEndPoint = [
+-        endPoint[0] != null ? endPoint[0] : 0.0,
+-        endPoint[1] != null ? endPoint[1] : 1.0,
+-      ]
++  type ControlPoint = [number, number]
++
++  const normalizePoint = (
++    point: LinearGradientPoint | null | undefined,
++    fallback: ControlPoint
++  ): ControlPoint => {
++    if (!Array.isArray(point)) {
++      return fallback
+     }
++
++    return [
++      typeof point[0] === 'number' ? point[0] : fallback[0],
++      typeof point[1] === 'number' ? point[1] : fallback[1],
++    ]
++  }
++
++  const getControlPoints = (): [ControlPoint, ControlPoint] => {
++    const correctedStartPoint = normalizePoint(startPoint, [0, 0])
++    const correctedEndPoint = normalizePoint(endPoint, [0, 1])
+     return [correctedStartPoint, correctedEndPoint]
+   }
+ 
+@@ -118,7 +122,7 @@ function calculateGradientColors(colors: string[], locations?: number[] | null)
+   return colors.map((color: string, index: number): string | void => {
+     const output = normalizeColor(color)
+-    if (locations && locations[index]) {
+-      const location = Math.max(0, Math.min(1, locations[index]))
++    if (locations && locations[index] != null) {
++      const location = Math.max(0, Math.min(1, locations[index] ?? 0))
+       // Convert 0...1 to 0...100
+       const percentage = location * 100
+       return `${output} ${percentage}%`
+diff --git a/src/LinearGradient.tsx b/src/LinearGradient.tsx
+index 462f00e7e5078ac3fa0cecb93e7b499f62407ea3..dbf1abfa9cd4cd5fce50882a8cb91d62f4f3ac0d 100644
+--- a/src/LinearGradient.tsx
++++ b/src/LinearGradient.tsx
+@@ -34,9 +34,9 @@ export const LinearGradient = LinearGradientFrame.styleable<LinearGradientExtraP
+       if (
+         colors.some((c) => {
+           const normalized = normalizeColor(c)
+-          if (!normalized || normalized.startsWith('$')) {
+-            return true
+-          }
++          return !normalized || normalized.startsWith('$')
+         })
+       ) {
+         console.error(

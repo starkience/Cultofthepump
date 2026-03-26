@@ -136,7 +136,8 @@ export class Fraction {
     const quotient = new Decimal(this.numerator.toString())
       .div(this.denominator.toString())
       .toSignificantDigits(significantDigits)
-    return quotient.toFormat(quotient.decimalPlaces(), format)
+    return (quotient as _Decimal & { toFormat: (decimalPlaces: number, format: object) => string })
+      .toFormat(quotient.decimalPlaces(), format)
   }
 
   public toFixed(
@@ -149,7 +150,9 @@ export class Fraction {
 
     Big.DP = decimalPlaces
     Big.RM = toFixedRounding[rounding]
-    return new Big(this.numerator.toString()).div(this.denominator.toString()).toFormat(decimalPlaces, format)
+    return (new Big(this.numerator.toString()).div(this.denominator.toString()) as _Big & {
+      toFormat: (decimalPlaces: number, format: object) => string
+    }).toFormat(decimalPlaces, format)
   }
 
   /**

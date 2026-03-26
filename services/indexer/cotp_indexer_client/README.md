@@ -13,7 +13,7 @@ npm i -g @genql/cli
 Then in your project root:
 
 ```sh
-genql --endpoint http://127.0.0.1:8080/v1/graphql --output ./src/client
+genql --endpoint "$REACT_APP_COTP_INDEXER_GRAPHQL_URL" --output ./src/client
 ```
 
 Read more at https://genql.dev/docs
@@ -29,3 +29,14 @@ Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
+
+## Environment
+
+The demo client is now environment-driven:
+
+```sh
+export REACT_APP_COTP_INDEXER_GRAPHQL_URL=http://127.0.0.1:8080/v1/graphql
+export REACT_APP_COTP_INDEXER_WS_URL=ws://127.0.0.1:8080/v1/graphql
+```
+
+Replace those with your Sepolia Hasura endpoint when the shared indexer is deployed.

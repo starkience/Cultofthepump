@@ -17,4 +17,9 @@ pub trait SwapSetters<TContractState> {
     fn set_starting_tick(ref self: TContractState, tick: i129);
     fn set_fees(ref self: TContractState, fees: u128);
     fn set_factory(ref self: TContractState, factory: ContractAddress);
+    /// Set the staking contract address. Zero address disables staking fee split.
+    fn set_staking(ref self: TContractState, staking: ContractAddress);
+    /// Set the share of fees that go to stakers, in basis points (0–10000).
+    /// Default 10000 = 100% of fees to stakers.
+    fn set_staking_fee_bps(ref self: TContractState, bps: u128);
 }

@@ -1,6 +1,7 @@
 #[starknet::contract]
 pub mod swap {
     use crate::bonding_curve::{BondingPriceDispatcher, BondingPriceDispatcherTrait};
+    use crate::staking::{ICultStakingDispatcher, ICultStakingDispatcherTrait};
     use ekubo::{
         interfaces::{
             core::{ICoreDispatcher, ICoreDispatcherTrait},
@@ -83,6 +84,10 @@ pub mod swap {
         pub fees: u128,
         /// Factory contract address that can set token prices
         pub factory: ContractAddress,
+        /// CultStaking contract address. Zero = staking disabled.
+        pub staking: ContractAddress,
+        /// Basis points of fees sent to stakers (0–10000). Default 10000 = 100%.
+        pub staking_fee_bps: u128,
         #[substorage(v0)]
         ownable: OwnableComponent::Storage,
         #[substorage(v0)]
@@ -110,6 +115,8 @@ pub mod swap {
         self.starting_tick.write(i129 { sign: true, mag: 34182119 });
         self.fees.write(100); // Default 1% fee
         self.factory.write(factory);
+        self.staking.write(contract_address_const::<0>());
+        self.staking_fee_bps.write(10000); // 100% of fees → stakers by default
         self.ownable.initializer(owner);
         self.strk_amount.write(101010);
     }
@@ -150,7 +157,23 @@ pub mod swap {
             let market_cap_entry = self.market_caps.entry(token.contract_address);
             let market_cap = market_cap_entry.read();
 
-            strk_contract.transfer_from(caller, self.treasury.read(), fees.into());
+            let staking_addr = self.staking.read();
+            let zero_address = starknet::contract_address_const::<0>();
+            if staking_addr != zero_address {
+                let staking_bps: u256 = self.staking_fee_bps.read().into();
+                let staking_fees = fees * staking_bps / 10000_u256;
+                let treasury_fees = fees - staking_fees;
+                if treasury_fees > 0 {
+                    strk_contract.transfer_from(caller, self.treasury.read(), treasury_fees);
+                }
+                if staking_fees > 0 {
+                    strk_contract.transfer_from(caller, staking_addr, staking_fees);
+                    ICultStakingDispatcher { contract_address: staking_addr }
+                        .notify_reward(token.contract_address, staking_fees);
+                }
+            } else {
+                strk_contract.transfer_from(caller, self.treasury.read(), fees);
+            }
             strk_contract.transfer_from(caller, self_address, buy);
 
             let new_market_cap = market_cap + buy;
@@ -214,8 +237,24 @@ pub mod swap {
             let fees = strk / self.fees.read().into();
             let rest = strk - fees;
 
-            strk_contract.transfer(self.treasury.read(), fees.into());
-            strk_contract.transfer(caller, rest.into());
+            let staking_addr = self.staking.read();
+            let zero_address = starknet::contract_address_const::<0>();
+            if staking_addr != zero_address {
+                let staking_bps: u256 = self.staking_fee_bps.read().into();
+                let staking_fees = fees * staking_bps / 10000_u256;
+                let treasury_fees = fees - staking_fees;
+                if treasury_fees > 0 {
+                    strk_contract.transfer(self.treasury.read(), treasury_fees);
+                }
+                if staking_fees > 0 {
+                    strk_contract.transfer(staking_addr, staking_fees);
+                    ICultStakingDispatcher { contract_address: staking_addr }
+                        .notify_reward(token.contract_address, staking_fees);
+                }
+            } else {
+                strk_contract.transfer(self.treasury.read(), fees);
+            }
+            strk_contract.transfer(caller, rest);
 
             market_cap_entry.write(market_cap - rest);
 
@@ -374,6 +413,23 @@ pub mod swap {
 
             // Emit event
             self.emit(ConfigUpdated { parameter: "factory", value: factory.into() });
+        }
+
+        fn set_staking(ref self: ContractState, staking: ContractAddress) {
+            self.ownable.assert_only_owner();
+            self.staking.write(staking);
+
+            // Emit event
+            self.emit(ConfigUpdated { parameter: "staking", value: staking.into() });
+        }
+
+        fn set_staking_fee_bps(ref self: ContractState, bps: u128) {
+            self.ownable.assert_only_owner();
+            assert!(bps <= 10000, "bps cannot exceed 10000");
+            self.staking_fee_bps.write(bps);
+
+            // Emit event
+            self.emit(ConfigUpdated { parameter: "staking_fee_bps", value: bps.into() });
         }
     }
 }

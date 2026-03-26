@@ -74,6 +74,22 @@ export default {
           state_mutability: "external"
         }
       ]
+    },
+    {
+      type: "function",
+      name: "market_caps",
+      inputs: [
+        {
+          name: "key",
+          type: "core::starknet::contract_address::ContractAddress"
+        }
+      ],
+      outputs: [
+        {
+          type: "core::integer::u256"
+        }
+      ],
+      state_mutability: "view"
     }
   ]
 } as const

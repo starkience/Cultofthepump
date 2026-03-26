@@ -15,4 +15,3 @@ class ShitcoinLaunchedPayload(BaseModel):
     symbol: str
     initial_shniping: int
     pile_of_shit: int
-    fees_paid: int

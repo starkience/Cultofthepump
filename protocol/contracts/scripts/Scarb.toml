@@ -20,4 +20,5 @@ build-external-contracts = [
     "contracts::bonding_curve::bonding_curve",
     "contracts::dutch_auction::dutch_auction",
     "contracts::erc20::erc20",
+    "contracts::staking::cult_staking",
 ]

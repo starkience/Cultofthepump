@@ -74,17 +74,35 @@ export async function persistSummonMetadata({
     return null
   }
 
-  await upsertCultMetadata({
-    name,
-    symbol,
-    address,
-    description: (manifesto || '').slice(0, 280),
-    imageUrl: normalizeRemoteImageUrl(visualUrl),
-    manifesto: manifesto || '',
-    network: 'sepolia',
-    createdBy: creatorAddress,
-    transactionHash,
-  })
+  // Retry with exponential backoff — the metadata API may not be immediately reachable
+  // after a summon (e.g. if the service is restarting or the network is briefly unavailable).
+  const MAX_ATTEMPTS = 5
+  let delay = 1000
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await upsertCultMetadata({
+        name,
+        symbol,
+        address,
+        description: (manifesto || '').slice(0, 280),
+        imageUrl: normalizeRemoteImageUrl(visualUrl),
+        manifesto: manifesto || '',
+        network: 'sepolia',
+        createdBy: creatorAddress,
+        transactionHash,
+      })
+      break
+    } catch (err) {
+      if (attempt === MAX_ATTEMPTS) {
+        console.error('[persistSummonMetadata] all retries failed', err)
+        // Don't throw — the summon succeeded on-chain; metadata can be added later.
+        return address
+      }
+      console.warn(`[persistSummonMetadata] attempt ${attempt} failed, retrying in ${delay}ms`, err)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      delay *= 2
+    }
+  }
 
   await SharedQueryClient.invalidateQueries({
     queryKey: [COTP_METADATA_API_CACHE_KEY],

@@ -3,9 +3,10 @@ import { createClient } from 'graphql-ws';
 import { generateSubscriptionOp, type trade as Trade } from '../client';
 import './TradeFeed.css';
 import { truncateAddress, toHexString } from '../utils';
+import { INDEXER_WS_URL } from '../config';
 
 const wsClient = createClient({
-  url: 'ws://localhost:8080/v1/graphql',  // adjust to your WS endpoint
+  url: INDEXER_WS_URL,
 });
 
 export function TradeFeed() {
@@ -83,4 +84,4 @@ export function TradeFeed() {
       </div>
     </div>
   );
-} 
+}

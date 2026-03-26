@@ -19,7 +19,9 @@ const AppBody = styled(Flex, {
   alignItems: 'center',
   flex: 1,
   pl: SIDEBAR_WIDTH,
-  pt: HEADER_HEIGHT,
+  pt: HEADER_HEIGHT + 32,
+  pb: 40,
+  backgroundColor: 'transparent',
 
   // Media query in Tamagui
   $sm: {

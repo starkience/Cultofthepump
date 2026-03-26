@@ -10,8 +10,31 @@ import { babel } from '@rollup/plugin-babel'
 // Environment check
 const isProduction = process.env.NODE_ENV === 'production'
 
+// Tamagui's vite plugin uses import.meta.resolve which is undefined in Node 18,
+// so its react-native / react-native-svg aliases silently break.
+// Use explicit absolute paths so they always resolve correctly.
+const rnSvgPath = path.resolve(__dirname, '../../node_modules/@tamagui/react-native-svg/dist/esm/index.mjs')
+const rnWebPath = path.resolve(__dirname, '../../node_modules/react-native-web/dist/cjs/index.js')
+
+const reactNativeFix = {
+  name: 'react-native-fix',
+  // configResolved runs after ALL plugin config() hooks have merged,
+  // so we can safely overwrite Tamagui's broken undefined aliases.
+  configResolved(config: { resolve: { alias: Array<{ find: string | RegExp; replacement: string }> } }) {
+    for (const entry of config.resolve.alias) {
+      if (entry.find === 'react-native-svg' || (entry.find instanceof RegExp && entry.find.test('react-native-svg'))) {
+        entry.replacement = rnSvgPath
+      }
+      if (entry.find === 'react-native' || (entry.find instanceof RegExp && String(entry.find) === '/^react-native$/')) {
+        entry.replacement = rnWebPath
+      }
+    }
+  },
+}
+
 export default defineConfig({
   plugins: [
+    reactNativeFix,
     babel({
       include: /cotp\/src.*\.(js|ts)x?$/,
       babelHelpers: 'bundled',
@@ -62,7 +85,8 @@ export default defineConfig({
       // This makes the src directory the root for imports
       '/': path.resolve(__dirname, './src'),
 
-      'react-native-svg': '@tamagui/react-native-svg',
+      'react-native-svg': rnSvgPath,
+      'react-native': rnWebPath,
     },
   },
 
@@ -85,7 +109,21 @@ export default defineConfig({
   },
 
   optimizeDeps: {
-    include: ['liveline'],
+    // Pre-bundle react-native-svg so Vite serves it from /__vite/deps/
+    // without needing to resolve it from files outside the root.
+    include: ['liveline', 'react-native-svg', '@tamagui/react-native-svg'],
+    esbuildOptions: {
+      plugins: [
+        {
+          name: 'react-native-stub',
+          setup(build: { onResolve: Function; onLoad: Function }) {
+            build.onResolve({ filter: /^react-native$/ }, () => ({ path: rnWebPath }))
+            // Map react-native-svg → @tamagui/react-native-svg for pre-bundling
+            build.onResolve({ filter: /^react-native-svg$/ }, () => ({ path: rnSvgPath }))
+          },
+        },
+      ],
+    },
   },
 
   server: {

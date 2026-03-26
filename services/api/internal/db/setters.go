@@ -2,6 +2,14 @@ package db
 
 import "strings"
 
+func CreateProphecy(tokenAddress, wallet, message, signature string) error {
+	_, err := db.Exec(
+		`INSERT INTO prophecy(token_address, wallet, message, signature) VALUES($1, $2, $3, $4)`,
+		strings.ToLower(tokenAddress), strings.ToLower(wallet), message, signature,
+	)
+	return err
+}
+
 func (token Token) Create() error {
 	q := `insert into tokens(name, symbol, address, description, image_url, manifesto, network, created_by, transaction_hash)
 		values($1, $2, $3, $4, $5, $6, $7, $8, $9)

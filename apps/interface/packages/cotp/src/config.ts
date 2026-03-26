@@ -1,5 +1,10 @@
 // eslint-disable-next-line no-restricted-imports
-import { UNRUGGABLE_API_URL } from 'react-native-dotenv'
+import {
+  COTP_INDEXER_GRAPHQL_URL,
+  COTP_INDEXER_WS_URL,
+  COTP_METADATA_API_URL,
+  UNRUGGABLE_API_URL,
+} from 'react-native-dotenv'
 
 /**
  * Naming requirements for different environments:
@@ -13,6 +18,9 @@ import { UNRUGGABLE_API_URL } from 'react-native-dotenv'
 
 export interface Config {
   unruggableApiUrl: string
+  cotpMetadataApiUrl: string
+  cotpIndexerGraphqlUrl: string
+  cotpIndexerWsUrl: string
 }
 
 /**
@@ -27,6 +35,21 @@ export interface Config {
 
 const _config: Config = {
   unruggableApiUrl: import.meta.env.VITE_UNRUGGABLE_API_URL || process.env.UNRUGGABLE_API_URL || UNRUGGABLE_API_URL,
+  cotpMetadataApiUrl:
+    import.meta.env.VITE_COTP_METADATA_API_URL ||
+    process.env.COTP_METADATA_API_URL ||
+    COTP_METADATA_API_URL ||
+    'http://127.0.0.1:8080',
+  cotpIndexerGraphqlUrl:
+    import.meta.env.VITE_COTP_INDEXER_GRAPHQL_URL ||
+    process.env.COTP_INDEXER_GRAPHQL_URL ||
+    COTP_INDEXER_GRAPHQL_URL ||
+    'http://127.0.0.1:8080/v1/graphql',
+  cotpIndexerWsUrl:
+    import.meta.env.VITE_COTP_INDEXER_WS_URL ||
+    process.env.COTP_INDEXER_WS_URL ||
+    COTP_INDEXER_WS_URL ||
+    'ws://127.0.0.1:8080/v1/graphql',
 }
 
 export const config = Object.freeze(_config)

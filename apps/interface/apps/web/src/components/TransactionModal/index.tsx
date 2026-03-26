@@ -1,4 +1,4 @@
-import { useAccount, useExplorer, useSendTransaction, useTransactionReceipt } from '@starknet-react/core'
+import { useExplorer, useTransactionReceipt } from '@starknet-react/core'
 import Modal from 'components/Modal'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -10,6 +10,8 @@ import { External } from 'ui/src/components/icons'
 import { extractLaunchedTokenAddress, persistSummonMetadata } from './metadata'
 import { SharedQueryClient } from 'cotp/src/data/apiClients/SharedQueryClient'
 import { COTP_INDEXER_API_CACHE_KEY } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
+import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { usePrivyExecute } from 'hooks/usePrivyExecute'
 
 interface WalletModalProps {
   isOpen: boolean
@@ -17,67 +19,59 @@ interface WalletModalProps {
 }
 
 export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
-  // global state
   const pushTransaction = usePushTransaction()
   const [calls, setCalls] = useCalls()
   const { name, symbol, manifesto } = useCultData()
   const visualUrl = useCultVisual()
-  const { address: creatorAddress } = useAccount()
-  const persistedTransactionRef = useRef<string | null>(null)
+  const { wallet } = useStarknetWallet()
+  const creatorAddress = wallet?.address ?? null
   const [launchedTokenAddress, setLaunchedTokenAddress] = useState<string | null>(null)
+  const persistedTransactionRef = useRef<string | null>(null)
 
-  // execution of the transaction
-  const { send, data, error, status } = useSendTransaction({ calls })
+  // Privy paymaster execution
+  const { execute, status, txHash, error, reset } = usePrivyExecute()
 
-  // transaction receipt
-  const transactionReceipt = useTransactionReceipt({ hash: data?.transaction_hash, watch: true, refetchInterval: 2000 })
+  // Transaction receipt polling (read-only — no wallet needed)
+  const transactionReceipt = useTransactionReceipt({ hash: txHash ?? undefined, watch: true, refetchInterval: 2000 })
 
-  // execute the transaction when the modal is opened and reset the calls when it is closed
+  // Fire the tx when the modal opens; reset state when it closes
   useEffect(() => {
-    if (isOpen) {
-      send()
-    } else {
+    if (isOpen && calls?.length) {
+      void execute(calls).catch(() => { /* error captured in hook state */ })
+    }
+    if (!isOpen) {
       setCalls([])
       setLaunchedTokenAddress(null)
+      reset()
     }
   }, [isOpen])
 
-  // push the transaction to the global state
+  // Push confirmed hash to global tx list
   useEffect(() => {
-    if (data?.transaction_hash) {
-      pushTransaction({ hash: data.transaction_hash })
-    }
-  }, [data])
+    if (txHash) pushTransaction({ hash: txHash })
+  }, [txHash])
 
+  // Persist summon metadata once receipt is confirmed
   useEffect(() => {
     const receipt = transactionReceipt.data
     if (
       !receipt ||
       receipt.statusReceipt !== 'success' ||
-      !data?.transaction_hash ||
+      !txHash ||
       !name ||
       !symbol ||
-      persistedTransactionRef.current === data.transaction_hash
-    ) {
-      return
-    }
+      persistedTransactionRef.current === txHash
+    ) return
 
-    persistedTransactionRef.current = data.transaction_hash
-
+    persistedTransactionRef.current = txHash
     void persistSummonMetadata({
       receipt: { events: 'events' in receipt ? receipt.events : [] },
-      transactionHash: data.transaction_hash,
-      name,
-      symbol,
-      manifesto,
-      visualUrl,
-      creatorAddress,
-    }).catch(() => {
-      persistedTransactionRef.current = null
-    })
-  }, [transactionReceipt.data?.statusReceipt, data?.transaction_hash, name, symbol, manifesto, visualUrl, creatorAddress])
+      transactionHash: txHash,
+      name, symbol, manifesto, visualUrl, creatorAddress,
+    }).catch(() => { persistedTransactionRef.current = null })
+  }, [transactionReceipt.data?.statusReceipt, txHash, name, symbol, manifesto, visualUrl, creatorAddress])
 
-  // track launched token address after success
+  // Extract launched token address from receipt events
   useEffect(() => {
     const receipt = transactionReceipt.data
     if (receipt && 'events' in receipt) {
@@ -86,14 +80,15 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
     }
   }, [transactionReceipt.data])
 
-  // invalidate all indexer queries the moment any tx confirms so trades/metrics update immediately
+  // Invalidate indexer cache on success
   useEffect(() => {
     if (transactionReceipt.data?.statusReceipt === 'success') {
       void SharedQueryClient.invalidateQueries({ queryKey: [COTP_INDEXER_API_CACHE_KEY] })
     }
   }, [transactionReceipt.data?.statusReceipt])
 
-  // auto-redirect to trade page 3s after a successful summon
+  // Auto-redirect to trade page after summon
+  const navigate = useNavigate()
   useEffect(() => {
     if (!launchedTokenAddress) return
     const timer = setTimeout(() => {
@@ -103,11 +98,8 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
     return () => clearTimeout(timer)
   }, [launchedTokenAddress])
 
-  const navigate = useNavigate()
-
-  // explorer
   const explorer = useExplorer()
-  const txLink = useMemo(() => data ? explorer.transaction(data.transaction_hash) : '', [data?.transaction_hash])
+  const txLink = useMemo(() => txHash ? explorer.transaction(txHash) : '', [txHash])
 
   const executedContent = useMemo(() => {
     if (!transactionReceipt.data?.statusReceipt) {
@@ -137,7 +129,6 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
             <TransactionLink />
           </Flex>
         )
-
       case 'success':
         if (launchedTokenAddress) {
           return (
@@ -147,15 +138,7 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
                 <Text variant="body2" color="$neutral2" textAlign="center">${symbol} is now live on Starknet.</Text>
                 <Text variant="body3" color="$neutral2" textAlign="center">Redirecting to trade page...</Text>
               </Flex>
-              <Button
-                theme="primary"
-                size="large"
-                width="100%"
-                onPress={() => {
-                  onDismiss()
-                  navigate(`/trade/${launchedTokenAddress}`)
-                }}
-              >
+              <Button theme="primary" size="large" width="100%" onPress={() => { onDismiss(); navigate(`/trade/${launchedTokenAddress}`) }}>
                 Trade ${symbol} now
               </Button>
               <TransactionLink />
@@ -169,38 +152,31 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
           </Flex>
         )
     }
-
     return null
   }, [transactionReceipt, launchedTokenAddress, symbol, txLink, onDismiss, navigate])
 
-  // React component that displays the last transaction
   const content = useMemo(() => {
     switch (status) {
       case 'pending':
         return (
           <Flex gap="$gap24" flexDirection="column" alignItems="center">
-            <Text variant="body2" textAlign="center">Please sign the transaction in your wallet.</Text>
+            <Text variant="body2" textAlign="center">Submitting via paymaster...</Text>
             <SpinningLoader size={32} />
           </Flex>
         )
-
       case 'success':
         return executedContent
-
       case 'error':
-        const errorMessage = error?.name === 'UserRejectedRequestError'
-          ? 'Transaction rejected'
-          : 'Failed to execure transaction'
-
         return (
           <Flex gap="$gap24" flexDirection="column" alignItems="center">
-            <Text variant="body2" color="$statusCritical" textAlign="center">{errorMessage}</Text>
+            <Text variant="body2" color="$statusCritical" textAlign="center">
+              {error?.name === 'UserRejectedRequestError' ? 'Transaction rejected' : (error?.message ?? 'Transaction failed')}
+            </Text>
           </Flex>
         )
     }
-
     return null
-  }, [data, error, status, executedContent])
+  }, [status, error, executedContent])
 
   return (
     <Modal title="Transaction" backgroundColor="$surface1" maxWidth={450} isOpen={isOpen} onDismiss={onDismiss}>

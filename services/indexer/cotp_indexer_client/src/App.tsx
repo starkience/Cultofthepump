@@ -3,9 +3,10 @@ import './App.css';
 import { createClient, type token as Token } from './client';
 import { TradeFeed } from './components/TradeFeed';
 import { truncateAddress } from './utils';
+import { INDEXER_GRAPHQL_URL } from './config';
 
 const client = createClient({
-  url: 'http://localhost:8080/v1/graphql',
+  url: INDEXER_GRAPHQL_URL,
   headers: {},
 });
 
@@ -106,4 +107,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;

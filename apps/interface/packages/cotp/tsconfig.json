@@ -7,6 +7,10 @@
     "src/**/*.json",
     "src/**/*.mts"
   ],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
+  ],
   "references": [
     {
       "path": "../ui"
@@ -16,6 +20,8 @@
     },
   ],
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [
       "chrome",
       "jest",

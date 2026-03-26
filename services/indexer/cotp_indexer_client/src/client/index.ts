@@ -15,6 +15,7 @@ import {
   GenqlError,
 } from './runtime'
 import types from './types'
+import { INDEXER_GRAPHQL_URL } from '../config'
 
 export type { FieldsSelection } from './runtime'
 export { GenqlError }
@@ -30,7 +31,7 @@ export interface Client {
 
 export const createClient = function (options?: ClientOptions): Client {
   return createClientOriginal({
-    url: 'http://127.0.0.1:8080/v1/graphql',
+    url: INDEXER_GRAPHQL_URL,
 
     ...options,
     queryRoot: typeMap.Query!,

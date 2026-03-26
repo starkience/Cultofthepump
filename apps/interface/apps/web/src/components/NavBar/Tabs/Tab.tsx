@@ -49,7 +49,7 @@ const TabLabel = styled(Text, {
   },
 })
 
-const IconWrapper = styled(Flex, {
+const IconWrapper = styled(Text, {
   "$group-active": {
     color: "$accent1",
   },

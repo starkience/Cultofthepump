@@ -2,7 +2,7 @@
 members = ["scripts", "contracts"]
 
 [workspace.dependencies]
-starknet = "2.13.1"
+starknet = "2.13.2"
 cubit = { path = "vendor/cubit" }
 openzeppelin_access = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
 openzeppelin_interfaces = { git = "https://github.com/OpenZeppelin/cairo-contracts", tag = "v3.0.0" }
@@ -11,7 +11,7 @@ openzeppelin_upgrades = { git = "https://github.com/OpenZeppelin/cairo-contracts
 ekubo = { git = "https://github.com/ekuboprotocol/abis" }
 ekubo_oracle_extension = { git = "https://github.com/EkuboProtocol/oracle-extension", rev = "054747d57d865a73ae5e4874e50eab28b777d732" }
 snforge_std = "0.58.0"
-assert_macros = "2.13.1"
+assert_macros = "2.13.2"
 sncast_std = "0.58.0"
 
 [package]
