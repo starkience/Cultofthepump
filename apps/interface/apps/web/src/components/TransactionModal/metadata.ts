@@ -44,19 +44,13 @@ export function extractLaunchedTokenAddress(receipt?: SuccessfulReceipt): string
 }
 
 function normalizeRemoteImageUrl(imageUrl?: string | null): string {
-  if (!imageUrl) {
-    return ''
-  }
-
+  if (!imageUrl) return ''
+  // Accept data URLs (base64 fallback when image host is unavailable)
+  if (imageUrl.startsWith('data:')) return imageUrl
   try {
     const parsed = new URL(imageUrl)
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return imageUrl
-    }
-  } catch {
-    return ''
-  }
-
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return imageUrl
+  } catch { /* invalid URL */ }
   return ''
 }
 

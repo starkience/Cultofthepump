@@ -6,7 +6,7 @@ import { WindowCard } from 'components/Card/WindowCard'
 import { useProphecies, createProphecy } from 'cotp/src/data/apiClients/cotpMetadataApi/cotpMetadataApiClient'
 import { SharedQueryClient } from 'cotp/src/data/apiClients/SharedQueryClient'
 import { COTP_METADATA_API_CACHE_KEY } from 'cotp/src/data/apiClients/cotpMetadataApi/cotpMetadataApiClient'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 
 const MAX_LENGTH = 280
 
@@ -69,9 +69,8 @@ interface ProphetBoardProps {
 }
 
 export function ProphetBoard({ tokenAddress }: ProphetBoardProps) {
-  const { wallet } = useStarknetWallet()
-  const walletAddress = wallet?.address ?? null
-  const walletId      = wallet?.id ?? null
+  const { address: walletAddress } = useWallet()
+  const walletId      = walletAddress
 
   const [message, setMessage]     = useState('')
   const [submitting, setSubmitting] = useState(false)

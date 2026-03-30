@@ -30,7 +30,7 @@ export type Connection = L2Connection
 const starknetArgentXWallet = new InjectedConnector({ options: { id: 'argentX' } })
 
 const argentXWalletConnection: L2Connection = {
-  getName: () => 'Argent X',
+  getName: () => 'Ready',
   connector: starknetArgentXWallet,
   type: ConnectionType.ARGENT_X,
   getIcon: ARGENT_X_ICON,

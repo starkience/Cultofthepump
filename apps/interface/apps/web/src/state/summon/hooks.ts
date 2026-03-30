@@ -28,7 +28,7 @@ export function useIsValidSummonSteps(): (cardKey: SummonStepKey) => boolean {
         return !!state.name && !!state.symbol
 
       case SummonStepKey.CultVisual:
-        return !!state.visualUrl
+        return true // Image optional on testnet (catbox.moe may be unavailable)
 
       case SummonStepKey.Balance:
         return !!state.auctionPrice && !!state.strkBalance && BigInt(state.strkBalance) >=  BigInt(state.auctionPrice)

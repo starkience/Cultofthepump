@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 import { useGlobalFeed, useCultTokens } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
 import { formatStrk } from 'cotp/src/utils/format'
 
@@ -65,13 +65,14 @@ type Entry =
 
 // ─── Identity ─────────────────────────────────────────────────────────────────
 function useIdentity(cults: { symbol: string; contractAddress: string }[]) {
-  const { wallet: _chatWallet } = useStarknetWallet()
-  const address = _chatWallet?.address
+  const { address } = useWallet()
   const { data: feed } = useGlobalFeed(200)
 
   return useCallback((): Pick<ChatMsg, 'username' | 'cultTag' | 'cultColor'> => {
-    let username = localStorage.getItem('chat_username')
-    if (!username) { username = randomName(); localStorage.setItem('chat_username', username) }
+    // Each Privy address gets its own persistent random name
+    const nameKey = address ? `chat_username_${address}` : 'chat_username'
+    let username = localStorage.getItem(nameKey)
+    if (!username) { username = randomName(); localStorage.setItem(nameKey, username) }
 
     let cultTag = ''; let color = C.primary
     if (address && feed?.length && cults.length) {
@@ -118,16 +119,23 @@ export function ChatRoom({ showFeed = false }: Props) {
 
   const feedEntries = useMemo((): Entry[] => {
     if (!showFeed || !feedData) return []
+    // feedData arrives newest-first from the indexer.
+    // Use blockNumber as the ordering key — it's always present and monotonically increasing.
+    // Estimate timestamps from blockNumber: Starknet Sepolia ≈ 30s/block.
+    // Anchor the most recent entry to "now" and work backwards.
     const now = Date.now()
-    return feedData.map((item, i) => {
+    const sorted = [...feedData].reverse() // oldest-first
+    const maxBlock = sorted.length > 0 ? sorted[sorted.length - 1].blockNumber : 0
+
+    return sorted.map((item) => {
       let ts: number
       if (item.timestampMs != null) {
         const raw = Number(item.timestampMs)
-        // Normalize: if value looks like Unix seconds (<1e12) convert to ms
         ts = raw < 1e12 ? raw * 1000 : raw
       } else {
-        // feedData is ordered newest-first; estimate from position
-        ts = now - i * 30_000
+        // Estimate: each block difference ≈ 30s before "now"
+        const blockDelta = maxBlock - item.blockNumber
+        ts = now - blockDelta * 30_000
       }
       return {
         kind:      'feed' as const,

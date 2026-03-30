@@ -13,10 +13,9 @@ export function formatWei(rawWei: string | bigint, decimals = 18): string {
     // Safe for amounts up to ~9 quadrillion tokens
     const value = Number(n) / Math.pow(10, decimals)
 
-    if (value < 0.0001) return '<0.0001'
-    if (value < 1) return value.toFixed(4).replace(/\.?0+$/, '')
-    if (value < 1_000_000) return value.toLocaleString('en', { maximumFractionDigits: 4, minimumFractionDigits: 0 })
-    return value.toLocaleString('en', { maximumFractionDigits: 2 })
+    if (value < 0.01) return '<0.01'
+    if (value < 1) return value.toFixed(2)
+    return value.toLocaleString('en', { maximumFractionDigits: 2, minimumFractionDigits: 2 })
   } catch {
     return rawWei.toString()
   }

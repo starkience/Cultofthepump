@@ -10,7 +10,7 @@ import { useCalls } from 'state/transactions/hooks'
 import { useOpenModal } from 'state/application/hooks'
 import { ApplicationModal } from 'state/application/reducer'
 import { useReadContract } from '@starknet-react/core'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 import { formatStrk, formatWei, formatPrice, computePrice, formatMarketCap } from 'cotp/src/utils/format'
 import { PriceChart } from 'components/PriceChart'
 import Landing from 'pages/Landing'
@@ -83,8 +83,7 @@ function BelieveSinPanel({ tokenAddress, tokenSymbol }: { tokenAddress: string; 
   const [preview, setPreview] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
 
-  const { wallet: _privyWallet } = useStarknetWallet()
-  const connectedAddress = _privyWallet?.address
+  const { address: connectedAddress } = useWallet()
   const swap = useSwap()
   const strk = useToken(STRK_SEPOLIA)
   const cult = useTokenAt(tokenAddress)
@@ -293,8 +292,7 @@ function ConvictionPanel({ tokenAddress, tokenSymbol, totalVolume, currentMarket
   const [tab, setTab] = useState<'stake' | 'unstake'>('stake')
   const [amountInput, setAmountInput] = useState('')
 
-  const { wallet: _privyWallet } = useStarknetWallet()
-  const connectedAddress = _privyWallet?.address
+  const { address: connectedAddress } = useWallet()
   const cult = useTokenAt(tokenAddress)
   const [, setCalls] = useCalls()
   const openTransactionModal = useOpenModal({ name: ApplicationModal.TRANSACTION })

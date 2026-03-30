@@ -1,15 +1,17 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BlockTag } from 'starknet'
 import { useReadContract } from '@starknet-react/core'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
-import { usePrivyExecute } from 'hooks/usePrivyExecute'
-import { useUserActivity } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
+import { useWallet } from 'context/WalletContext'
+import { useUserActivity, useCultTokens } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
+import type { CultTokenRecord } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
 import { STRK_SEPOLIA } from 'cotp/src/constants/tokens'
 import { STAKING_ADDRESS, StakingABI, ERC20ABI } from 'cotp/src/constants/contracts'
 import { formatWei, formatStrk } from 'cotp/src/utils/format'
-// AVNU Sepolia swap API — called directly (no SDK needed)
-const AVNU_API = 'https://sepolia.api.avnu.fi'
+import UsdcIcon from 'assets/tokens/usdc.svg?react'
+import StrkIcon from 'assets/tokens/strk.svg?react'
+import { getPendingDeposit, clearPendingDeposit, type PendingDeposit } from 'components/DepositModal'
+import { AvnuSwapProvider, Amount, fromAddress, ChainId, sepoliaTokens } from 'starkzap'
 import type { UserTradeRecord } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -94,8 +96,20 @@ function StakingRow({ tokenAddress, tokenSymbol, staker }: StakingRowProps) {
 
 // ─── Portfolio page ───────────────────────────────────────────────────────────
 export default function Portfolio() {
-  const { wallet, loading: walletLoading } = useStarknetWallet()
-  const address = wallet?.address
+  const { address, isConnected } = useWallet()
+  const walletLoading = false
+
+  // Local transaction log (swaps, deposits, withdrawals done in this session)
+  const [localTxs, setLocalTxs] = useState<{ hash: string; type: string; detail: string; ts: number }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('cotp_local_txs') ?? '[]') } catch { return [] }
+  })
+  const addLocalTx = useCallback((tx: { hash: string; type: string; detail: string }) => {
+    setLocalTxs(prev => {
+      const updated = [{ ...tx, ts: Date.now() }, ...prev].slice(0, 50)
+      localStorage.setItem('cotp_local_txs', JSON.stringify(updated))
+      return updated
+    })
+  }, [])
 
   const { data: strkRaw } = useReadContract({
     abi: ERC20ABI, address: STRK_SEPOLIA.address as `0x${string}`,
@@ -110,37 +124,135 @@ export default function Portfolio() {
   const strkBalance = (strkRaw as bigint | undefined) ?? 0n
   const usdcBalance = (usdcRaw as bigint | undefined) ?? 0n
 
+  // ── Pending deposit tracking ──
+  const [pendingDeposit, setPendingDepositState] = useState<PendingDeposit | null>(getPendingDeposit)
+
+  // Poll localStorage for pending deposit changes (set by DepositModal)
+  useEffect(() => {
+    const id = setInterval(() => {
+      const current = getPendingDeposit()
+      setPendingDepositState(prev => {
+        if (!current && !prev) return prev
+        if (!current && prev) return null
+        if (current && !prev) return current
+        if (current && prev && current.startedAt !== prev.startedAt) return current
+        return prev
+      })
+    }, 2000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Auto-clear pending deposit after 10 minutes (stale) or if balance increased
+  const prevUsdcRef = useRef(usdcBalance)
+  useEffect(() => {
+    if (!pendingDeposit) return
+    // If balance increased since deposit started, clear the notification
+    if (usdcBalance > prevUsdcRef.current && prevUsdcRef.current >= 0n) {
+      clearPendingDeposit()
+      setPendingDepositState(null)
+    }
+    prevUsdcRef.current = usdcBalance
+  }, [usdcBalance, pendingDeposit])
+
+  useEffect(() => {
+    if (!pendingDeposit) return
+    if (Date.now() - pendingDeposit.startedAt > 10 * 60 * 1000) {
+      clearPendingDeposit()
+      setPendingDepositState(null)
+    }
+  }, [pendingDeposit])
+
+  // ── Fetch all cult tokens + on-chain balances for the Privy wallet ──
+  const cultTokens = useCultTokens({ params: { limit: 200, orderBy: 'volume' }, refetchInterval: 60_000 })
+  const [tokenBalances, setTokenBalances] = useState<Map<string, bigint>>(new Map())
+
+  useEffect(() => {
+    if (!address || !cultTokens.data?.length) return
+    let cancelled = false
+    const STARKNET_RPC_URL = import.meta.env.VITE_ALCHEMY_RPC_URL as string
+    const BALANCE_OF_SELECTOR = '0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e'
+
+    async function fetchBalances() {
+      const balances = new Map<string, bigint>()
+      // Batch in groups of 10 to avoid overwhelming the RPC
+      const tokens = cultTokens.data!
+      for (let i = 0; i < tokens.length; i += 10) {
+        const batch = tokens.slice(i, i + 10)
+        const results = await Promise.allSettled(
+          batch.map(async (token) => {
+            const res = await fetch(STARKNET_RPC_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0', id: 1,
+                method: 'starknet_call',
+                params: [{
+                  contract_address: token.contractAddress,
+                  entry_point_selector: BALANCE_OF_SELECTOR,
+                  calldata: [address],
+                }, 'latest'],
+              }),
+            })
+            const json = await res.json() as { result?: string[] }
+            if (!json.result?.length) return { addr: token.contractAddress, bal: 0n }
+            const low  = BigInt(json.result[0] ?? '0x0')
+            const high = BigInt(json.result[1] ?? '0x0')
+            return { addr: token.contractAddress, bal: low + (high << 128n) }
+          })
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.bal > 0n) {
+            balances.set(r.value.addr, r.value.bal)
+          }
+        }
+      }
+      if (!cancelled) setTokenBalances(balances)
+    }
+    void fetchBalances()
+    const interval = setInterval(() => void fetchBalances(), 30_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [address, cultTokens.data])
+
+  // Combine indexer trade history with on-chain balances for a complete picture
   const { data: trades = [], isLoading: tradesLoading } = useUserActivity(address, 100)
 
+  // Build cult holdings from on-chain balances (primary) + trade history (for STRK cost)
   const cultHoldings = useMemo(() => {
-    const map = new Map<string, {
+    const tokens = cultTokens.data ?? []
+    const result: {
       symbol: string; name: string; address: string
-      buyTokens: bigint; sellTokens: bigint
-      strkIn: bigint; strkOut: bigint
-    }>()
+      balance: bigint; strkSpent: bigint
+    }[] = []
+
+    // Get STRK cost from trade history
+    const strkByToken = new Map<string, bigint>()
     for (const t of trades) {
       if (!t.tokenContractAddress) continue
-      const existing = map.get(t.tokenContractAddress) ?? {
-        symbol: t.tokenSymbol, name: t.tokenName, address: t.tokenContractAddress,
-        buyTokens: 0n, sellTokens: 0n, strkIn: 0n, strkOut: 0n,
-      }
-      const tq = BigInt(t.tokenQty || '0')
-      const sq = BigInt(t.strkQty  || '0')
-      if (t.side === 0) { existing.buyTokens += tq; existing.strkIn  += sq }
-      else              { existing.sellTokens += tq; existing.strkOut += sq }
-      map.set(t.tokenContractAddress, existing)
+      const prev = strkByToken.get(t.tokenContractAddress) ?? 0n
+      const sq = BigInt(t.strkQty || '0')
+      strkByToken.set(t.tokenContractAddress, t.side === 0 ? prev + sq : prev - sq)
     }
-    return [...map.values()].filter(h => h.buyTokens > h.sellTokens)
-  }, [trades])
 
-  const uniqueCults = useMemo(() => {
-    const seen = new Map<string, string>()
-    for (const t of trades) {
-      if (t.tokenContractAddress && !seen.has(t.tokenContractAddress))
-        seen.set(t.tokenContractAddress, t.tokenSymbol)
+    for (const token of tokens) {
+      const bal = tokenBalances.get(token.contractAddress)
+      if (bal && bal > 0n) {
+        result.push({
+          symbol:   token.symbol,
+          name:     token.name,
+          address:  token.contractAddress,
+          balance:  bal,
+          strkSpent: strkByToken.get(token.contractAddress) ?? 0n,
+        })
+      }
     }
-    return [...seen.entries()].map(([addr, symbol]) => ({ addr, symbol }))
-  }, [trades])
+
+    return result
+  }, [cultTokens.data, tokenBalances, trades])
+
+  // Unique cults for staking panel (from on-chain balances)
+  const uniqueCults = useMemo(() => {
+    return cultHoldings.map(h => ({ addr: h.address, symbol: h.symbol }))
+  }, [cultHoldings])
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 24px 60px' }}>
@@ -164,19 +276,20 @@ export default function Portfolio() {
       ) : (
         <>
           {/* ── Wallet cards ────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 40 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: pendingDeposit ? 12 : 40 }}>
             <StatCard
               label="USDC Balance"
               value={formatUsdc(usdcBalance)}
               unit="USDC"
               accent={C.primary}
-              icon="monetization_on"
+              icon={<UsdcIcon style={{ width: 20, height: 20 }} />}
             />
             <StatCard
               label="STRK Balance"
               value={formatWei(strkBalance.toString())}
               unit="STRK"
               accent="rgba(72,72,72,0.8)"
+              icon={<StrkIcon style={{ width: 20, height: 20 }} />}
               dim
             />
             <StatCard
@@ -189,6 +302,9 @@ export default function Portfolio() {
             />
           </div>
 
+          {/* ── Pending deposit notification ──────────────────────────── */}
+          {pendingDeposit && <PendingDepositBanner deposit={pendingDeposit} />}
+
           {/* ── My Cults + Conviction ───────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 24, marginBottom: 24 }}>
 
@@ -196,17 +312,15 @@ export default function Portfolio() {
             <div>
               <SectionHeading title="My Cults" accentColor={C.primary} />
               <Panel minHeight={192}>
-                {tradesLoading ? (
+                {cultTokens.isLoading ? (
                   <LoadingRows />
                 ) : cultHoldings.length === 0 ? (
                   <EmptyState message="No active cult positions." subtext="Start believing." />
                 ) : (
                   <>
-                    <TableHeader cols="1fr 140px 140px" labels={['CULT', 'HOLDING', 'NET STRK']} />
+                    <TableHeader cols="1fr 140px 140px" labels={['CULT', 'BALANCE', 'COST']} />
                     {cultHoldings.map(h => {
-                      const net      = h.buyTokens - h.sellTokens
-                      const strkNet  = h.strkIn - h.strkOut
-                      const isCost   = strkNet >= 0n
+                      const isCost = h.strkSpent > 0n
                       return (
                         <div key={h.address} style={{
                           display: 'grid', gridTemplateColumns: '1fr 140px 140px',
@@ -218,9 +332,9 @@ export default function Portfolio() {
                             </Link>
                             <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>{h.name}</span>
                           </div>
-                          <span style={{ fontFamily: M, fontSize: 12, color: C.text }}>{formatWei(net.toString())}</span>
-                          <span style={{ fontFamily: M, fontSize: 12, color: isCost ? C.secondary : C.primary }}>
-                            {isCost ? '−' : '+'}{formatWei((isCost ? strkNet : -strkNet).toString())} STRK
+                          <span style={{ fontFamily: M, fontSize: 12, color: C.text }}>{formatWei(h.balance.toString())}</span>
+                          <span style={{ fontFamily: M, fontSize: 12, color: isCost ? C.muted : C.dim }}>
+                            {isCost ? formatWei(h.strkSpent.toString()) + ' STRK' : '—'}
                           </span>
                         </div>
                       )
@@ -254,36 +368,66 @@ export default function Portfolio() {
           </div>
 
           {/* ── Swap USDC → STRK ──────────────────────────────────────── */}
-          <SwapPanel address={address} usdcBalance={usdcBalance} />
+          <SwapPanel address={address} usdcBalance={usdcBalance} strkBalance={strkBalance} onTx={addLocalTx} />
 
           {/* ── Transaction Log ─────────────────────────────────────────── */}
           <div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
               <SectionHeading title="Transaction Log" accentColor="rgba(255,255,255,0.2)" />
               <span style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                Last {Math.min(trades.length, 50)} Rituals
+                {localTxs.length + trades.length} transactions
               </span>
             </div>
 
             <div style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               {/* Table header row */}
               <div style={{
-                display: 'grid', gridTemplateColumns: '80px 1fr 150px 150px 100px',
+                display: 'grid', gridTemplateColumns: '80px 1fr 1fr 100px',
                 padding: '10px 16px',
                 background: C.surfaceHi,
                 borderBottom: `1px solid ${C.border}`,
               }}>
-                {['TYPE', 'CULT', 'TOKENS', 'STRK', 'BLOCK'].map(h => (
+                {['TYPE', 'DETAIL', 'TIME', 'TX'].map(h => (
                   <span key={h} style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
                     {h}
                   </span>
                 ))}
               </div>
 
-              {/* Rows */}
+              {/* Local transactions (swaps, deposits, withdrawals) */}
+              {localTxs.map(tx => (
+                <div key={tx.hash} style={{
+                  display: 'grid', gridTemplateColumns: '80px 1fr 1fr 100px',
+                  padding: '9px 16px', borderBottom: `1px solid ${C.border}`, alignItems: 'center',
+                }}>
+                  <span style={{
+                    fontFamily: M, fontSize: 10, fontWeight: 700,
+                    color: '#7eb8ff',
+                    background: 'rgba(126,184,255,0.08)',
+                    border: '1px solid rgba(126,184,255,0.2)',
+                    padding: '2px 7px', display: 'inline-block',
+                  }}>
+                    {tx.type}
+                  </span>
+                  <span style={{ fontFamily: M, fontSize: 11, color: C.text }}>{tx.detail}</span>
+                  <span style={{ fontFamily: M, fontSize: 11, color: C.muted }}>
+                    {new Date(tx.ts).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  <a
+                    href={`https://sepolia.voyager.online/tx/${tx.hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontFamily: M, fontSize: 10, color: C.primary, textDecoration: 'none' }}
+                  >
+                    {tx.hash.slice(0, 6)}…{tx.hash.slice(-4)} ↗
+                  </a>
+                </div>
+              ))}
+
+              {/* Indexer trades */}
               {tradesLoading ? (
                 <div style={{ padding: '20px 16px' }}><LoadingRows /></div>
-              ) : trades.length === 0 ? (
+              ) : trades.length === 0 && localTxs.length === 0 ? (
                 <div style={{ minHeight: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <EmptyState message="No transactions yet." subtext="" />
                 </div>
@@ -293,7 +437,7 @@ export default function Portfolio() {
                     const isBuy = t.side === 0
                     return (
                       <div key={t.id} style={{
-                        display: 'grid', gridTemplateColumns: '80px 1fr 150px 150px 100px',
+                        display: 'grid', gridTemplateColumns: '80px 1fr 1fr 100px',
                         padding: '9px 16px', borderBottom: `1px solid ${C.border}`, alignItems: 'center',
                         background: isBuy ? C.primaryDim : 'transparent',
                       }}>
@@ -314,10 +458,19 @@ export default function Portfolio() {
                           ) : (
                             <span style={{ fontFamily: M, fontSize: 11, color: C.muted }}>—</span>
                           )}
+                          <span style={{ fontFamily: M, fontSize: 10, color: C.dim, marginLeft: 8 }}>
+                            {formatWei(t.tokenQty)} / {formatWei(t.strkQty)} STRK
+                          </span>
                         </div>
-                        <span style={{ fontFamily: M, fontSize: 11, color: C.text }}>{formatWei(t.tokenQty)}</span>
-                        <span style={{ fontFamily: M, fontSize: 11, color: C.text }}>{formatWei(t.strkQty)} STRK</span>
-                        <span style={{ fontFamily: M, fontSize: 11, color: C.muted }}>#{t.blockNumber}</span>
+                        <span style={{ fontFamily: M, fontSize: 11, color: C.muted }}>Block #{t.blockNumber}</span>
+                        <a
+                          href={`https://sepolia.voyager.online/block/${t.blockNumber}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ fontFamily: M, fontSize: 10, color: C.muted, textDecoration: 'none' }}
+                        >
+                          #{t.blockNumber} ↗
+                        </a>
                       </div>
                     )
                   })}
@@ -331,53 +484,79 @@ export default function Portfolio() {
   )
 }
 
-// ─── Swap USDC → STRK ─────────────────────────────────────────────────────────
+// ─── Swap USDC ↔ STRK (via starkzap AvnuSwapProvider) ────────────────────────
 
-function parseUsdcInput(val: string): bigint | null {
+const avnuSwap = new AvnuSwapProvider()
+const USDC_ZAP = sepoliaTokens.USDC
+const STRK_ZAP = sepoliaTokens.STRK
+
+function parseTokenInput(val: string, decimals: number): bigint | null {
   try {
     const num = parseFloat(val)
     if (!num || num <= 0 || isNaN(num)) return null
     const [int, frac = ''] = val.split('.')
-    return BigInt(int) * 1_000_000n + BigInt(frac.padEnd(6, '0').slice(0, 6))
+    return BigInt(int) * BigInt(10 ** decimals) + BigInt(frac.padEnd(decimals, '0').slice(0, decimals))
   } catch { return null }
 }
 
-function SwapPanel({ address, usdcBalance }: { address: string; usdcBalance: bigint }) {
-  const [amount, setAmount]   = useState('')
-  const [quote, setQuote]     = useState<string | null>(null)
+function fmtBal(bal: bigint, dec: number): string {
+  if (bal === 0n) return '0.00'
+  const divisor = BigInt(10 ** dec)
+  const whole = bal / divisor
+  const frac  = (bal % divisor).toString().padStart(dec, '0').slice(0, 2)
+  return `${whole}.${frac}`
+}
+
+type SwapDir = 'usdc-to-strk' | 'strk-to-usdc'
+
+function SwapPanel({ address, usdcBalance, strkBalance, onTx }: {
+  address: string; usdcBalance: bigint; strkBalance: bigint
+  onTx: (tx: { hash: string; type: string; detail: string }) => void
+}) {
+  const [dir, setDir]       = useState<SwapDir>('usdc-to-strk')
+  const [amount, setAmount] = useState('')
+  const [quote, setQuote]   = useState<string | null>(null)
   const [quoting, setQuoting] = useState(false)
   const [swapStatus, setSwapStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle')
   const [swapError, setSwapError]   = useState<string | null>(null)
   const [swapTx, setSwapTx]         = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
 
-  const { execute } = usePrivyExecute()
+  const { execute } = useWallet()
 
-  const parsedAmount = useMemo(() => parseUsdcInput(amount), [amount])
+  const sellDecimals = dir === 'usdc-to-strk' ? 6 : 18
+  const buyDecimals  = dir === 'usdc-to-strk' ? 18 : 6
+  const sellBalance  = dir === 'usdc-to-strk' ? usdcBalance : strkBalance
+  const sellSymbol   = dir === 'usdc-to-strk' ? 'USDC' : 'STRK'
+  const buySymbol    = dir === 'usdc-to-strk' ? 'STRK' : 'USDC'
+  const SellIcon     = dir === 'usdc-to-strk' ? UsdcIcon : StrkIcon
+  const BuyIcon      = dir === 'usdc-to-strk' ? StrkIcon : UsdcIcon
+
+  const parsedAmount = useMemo(() => parseTokenInput(amount, sellDecimals), [amount, sellDecimals])
+
+  const sellZapToken = dir === 'usdc-to-strk' ? USDC_ZAP : STRK_ZAP
+  const buyZapToken  = dir === 'usdc-to-strk' ? STRK_ZAP : USDC_ZAP
 
   const fetchQuote = useCallback(async (sellAmount: bigint) => {
     setQuoting(true)
     setQuote(null)
     try {
-      const params = new URLSearchParams({
-        sellTokenAddress: USDC_SN_SEPOLIA,
-        buyTokenAddress:  STRK_SEPOLIA.address,
-        sellAmount:       `0x${sellAmount.toString(16)}`,
-        takerAddress:     address,
-        size:             '1',
+      const q = await avnuSwap.getQuote({
+        chainId:      ChainId.SEPOLIA,
+        tokenIn:      sellZapToken,
+        tokenOut:     buyZapToken,
+        amountIn:     Amount.fromRaw(sellAmount, sellZapToken),
+        takerAddress: fromAddress(address),
+        slippageBps:  100n,
       })
-      const res = await fetch(`${AVNU_API}/swap/v2/quotes?${params}`)
-      if (!res.ok) throw new Error(`Quote ${res.status}`)
-      const quotes = await res.json() as Array<{ quoteId: string; buyAmount: string }>
-      if (quotes.length > 0) {
-        setQuote(formatWei(BigInt(quotes[0].buyAmount).toString()))
-      }
-    } catch {
+      setQuote(fmtBal(q.amountOutBase, buyDecimals))
+    } catch (err) {
+      console.error('[swap quote]', err)
       setQuote(null)
     } finally {
       setQuoting(false)
     }
-  }, [address])
+  }, [address, sellZapToken, buyZapToken, buyDecimals])
 
   const onAmountChange = useCallback((val: string) => {
     setAmount(val)
@@ -385,131 +564,131 @@ function SwapPanel({ address, usdcBalance }: { address: string; usdcBalance: big
     setSwapError(null)
     setSwapTx(null)
     clearTimeout(debounceRef.current)
-    const parsed = parseUsdcInput(val)
+    const parsed = parseTokenInput(val, sellDecimals)
     if (!parsed) { setQuote(null); return }
     debounceRef.current = setTimeout(() => void fetchQuote(parsed), 400)
-  }, [fetchQuote])
+  }, [fetchQuote, sellDecimals])
+
+  const flipDirection = useCallback(() => {
+    setDir(d => d === 'usdc-to-strk' ? 'strk-to-usdc' : 'usdc-to-strk')
+    setAmount('')
+    setQuote(null)
+    setSwapStatus('idle')
+    setSwapError(null)
+    setSwapTx(null)
+  }, [])
 
   const handleSwap = useCallback(async () => {
     if (!parsedAmount || swapStatus === 'pending') return
     setSwapStatus('pending')
     setSwapError(null)
     try {
-      // 1. Get fresh quote
-      const params = new URLSearchParams({
-        sellTokenAddress: USDC_SN_SEPOLIA,
-        buyTokenAddress:  STRK_SEPOLIA.address,
-        sellAmount:       `0x${parsedAmount.toString(16)}`,
-        takerAddress:     address,
-        size:             '1',
+      const prepared = await avnuSwap.prepareSwap({
+        chainId:      ChainId.SEPOLIA,
+        tokenIn:      sellZapToken,
+        tokenOut:     buyZapToken,
+        amountIn:     Amount.fromRaw(parsedAmount, sellZapToken),
+        takerAddress: fromAddress(address),
+        slippageBps:  100n,
       })
-      const qRes = await fetch(`${AVNU_API}/swap/v2/quotes?${params}`)
-      if (!qRes.ok) throw new Error(`Quote ${qRes.status}`)
-      const quotes = await qRes.json() as Array<{ quoteId: string; buyAmount: string }>
-      if (!quotes.length) throw new Error('No swap route found')
 
-      // 2. Build swap calls from quote
-      const bRes = await fetch(`${AVNU_API}/swap/v2/build`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quoteId:      quotes[0].quoteId,
-          takerAddress: address,
-          slippage:     0.01, // 1%
-        }),
-      })
-      if (!bRes.ok) throw new Error(`Build ${bRes.status}`)
-      const build = await bRes.json() as { calldata: Array<{ contractAddress: string; entrypoint: string; calldata: string[] }> }
-
-      // 3. Execute via privy paymaster
-      const txHash = await execute(build.calldata)
+      const txHash = await execute(prepared.calls)
       setSwapTx(txHash)
       setSwapStatus('success')
+      onTx({ hash: txHash, type: 'SWAP', detail: `${amount} ${sellSymbol} → ${buySymbol}` })
       setAmount('')
       setQuote(null)
     } catch (e) {
       setSwapError(e instanceof Error ? e.message : 'Swap failed')
       setSwapStatus('error')
     }
-  }, [parsedAmount, address, execute, swapStatus])
+  }, [parsedAmount, address, execute, swapStatus, sellZapToken, buyZapToken])
 
-  const exceedsBalance = parsedAmount ? parsedAmount > usdcBalance : false
+  const exceedsBalance = parsedAmount ? parsedAmount > sellBalance : false
   const canSwap = parsedAmount && !exceedsBalance && quote && swapStatus !== 'pending'
+
+  const boxStyle: React.CSSProperties = {
+    background: C.surfaceHi,
+    border: `1px solid ${C.border}`,
+    padding: '14px 16px',
+  }
+
+  const tokenPillStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+    background: 'rgba(255,255,255,0.04)',
+    border: `1px solid ${C.border}`,
+    padding: '5px 10px 5px 7px',
+  }
 
   return (
     <div style={{ marginBottom: 24 }}>
-      <SectionHeading title="Swap USDC for STRK" accentColor={C.primary} />
-      <div style={{
-        background: C.surface,
-        border: `1px solid ${C.border}`,
-        padding: '24px 24px',
-      }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', marginBottom: 16 }}>
-          {/* Amount input */}
-          <div style={{ flex: 1 }}>
-            <label style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
-              USDC AMOUNT
-            </label>
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              background: C.surfaceHi, border: `1px solid ${C.border}`,
-              padding: '10px 14px',
-            }}>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={amount}
-                onChange={e => onAmountChange(e.target.value)}
-                placeholder="0.00"
-                style={{
-                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                  fontFamily: M, fontSize: 18, fontWeight: 700, color: C.text,
-                  width: '100%',
-                }}
-              />
-              <span style={{ fontFamily: M, fontSize: 11, color: C.dim, marginLeft: 8 }}>USDC</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-              <span style={{ fontFamily: M, fontSize: 9, color: exceedsBalance ? C.secondary : C.dim }}>
-                {exceedsBalance ? 'Exceeds balance' : `Balance: ${formatUsdc(usdcBalance)} USDC`}
-              </span>
-              {usdcBalance > 0n && (
-                <button
-                  onClick={() => onAmountChange((Number(usdcBalance) / 1e6).toString())}
-                  style={{
-                    fontFamily: M, fontSize: 9, color: C.primary, background: 'transparent',
-                    border: 'none', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em',
-                  }}
-                >
-                  MAX
-                </button>
+      <SectionHeading title="Swap" accentColor={C.primary} />
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, padding: '20px' }}>
+
+        {/* YOU PAY */}
+        <div style={boxStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.12em' }}>YOU PAY</span>
+            <span style={{ fontFamily: M, fontSize: 9, color: C.dim }}>
+              {fmtBal(sellBalance, sellDecimals)} {sellSymbol}
+              {sellBalance > 0n && (
+                <button onClick={() => onAmountChange(fmtBal(sellBalance, sellDecimals))} style={{
+                  fontFamily: M, fontSize: 9, color: C.primary, background: 'transparent',
+                  border: 'none', cursor: 'pointer', marginLeft: 6,
+                }}>MAX</button>
               )}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <input
+              type="number" step="any" min="0" placeholder="0.00" value={amount}
+              onChange={e => onAmountChange(e.target.value)}
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                fontFamily: M, fontSize: 24, fontWeight: 700, color: C.text, width: '100%',
+              }}
+            />
+            <div style={tokenPillStyle}>
+              <SellIcon style={{ width: 20, height: 20 }} />
+              <span style={{ fontFamily: M, fontSize: 12, fontWeight: 700, color: C.text }}>{sellSymbol}</span>
             </div>
           </div>
+          {exceedsBalance && <span style={{ fontFamily: M, fontSize: 9, color: C.secondary, marginTop: 6, display: 'block' }}>Exceeds balance</span>}
+        </div>
 
-          {/* Arrow */}
-          <div style={{ paddingBottom: 24, color: C.dim, fontFamily: M, fontSize: 16 }}>→</div>
+        {/* Flip button */}
+        <div style={{ display: 'flex', justifyContent: 'center', margin: '-6px 0', position: 'relative', zIndex: 1 }}>
+          <button onClick={flipDirection} style={{
+            width: 32, height: 32,
+            background: C.surface, border: `1px solid ${C.border}`,
+            color: C.primary, fontSize: 14, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = C.primary; e.currentTarget.style.color = '#0e0e0e'; e.currentTarget.style.transform = 'rotate(180deg)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = C.surface; e.currentTarget.style.color = C.primary; e.currentTarget.style.transform = 'rotate(0)' }}
+          >↕</button>
+        </div>
 
-          {/* Output preview */}
-          <div style={{ flex: 1 }}>
-            <label style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
-              YOU RECEIVE
-            </label>
-            <div style={{
-              display: 'flex', alignItems: 'center',
-              background: C.surfaceHi, border: `1px solid ${C.border}`,
-              padding: '10px 14px', minHeight: 44,
-            }}>
-              <span style={{ fontFamily: M, fontSize: 18, fontWeight: 700, color: quote ? C.primary : C.dim, flex: 1 }}>
-                {quoting ? '…' : quote ?? '—'}
-              </span>
-              <span style={{ fontFamily: M, fontSize: 11, color: C.dim, marginLeft: 8 }}>STRK</span>
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <span style={{ fontFamily: M, fontSize: 9, color: C.dim }}>via AVNU aggregator</span>
+        {/* YOU RECEIVE */}
+        <div style={{ ...boxStyle, marginBottom: 0 }}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.12em' }}>YOU RECEIVE</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontFamily: M, fontSize: 24, fontWeight: 700, color: quote ? C.primary : C.dim, flex: 1 }}>
+              {quoting ? '…' : quote ?? '0.00'}
+            </span>
+            <div style={tokenPillStyle}>
+              <BuyIcon style={{ width: 20, height: 20 }} />
+              <span style={{ fontFamily: M, fontSize: 12, fontWeight: 700, color: C.text }}>{buySymbol}</span>
             </div>
           </div>
+        </div>
+
+        {/* AVNU attribution — outside the box */}
+        <div style={{ fontFamily: M, fontSize: 9, color: C.dim, textAlign: 'center', margin: '10px 0 14px' }}>
+          via AVNU aggregator
         </div>
 
         {/* Swap button */}
@@ -527,14 +706,21 @@ function SwapPanel({ address, usdcBalance }: { address: string; usdcBalance: big
             transition: 'all 0.15s ease',
           }}
         >
-          {swapStatus === 'pending' ? 'SWAPPING…' : 'SWAP USDC → STRK'}
+          {swapStatus === 'pending' ? 'SWAPPING…' : `SWAP ${sellSymbol} → ${buySymbol}`}
         </button>
 
-        {/* Status */}
         {swapStatus === 'success' && swapTx && (
-          <div style={{ marginTop: 12, fontFamily: M, fontSize: 10, color: C.primary }}>
-            Swap submitted! Tx: {swapTx.slice(0, 10)}…{swapTx.slice(-6)}
-          </div>
+          <a
+            href={`https://sepolia.voyager.online/tx/${swapTx}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'block', marginTop: 12, fontFamily: M, fontSize: 10, color: C.primary,
+              textDecoration: 'none',
+            }}
+          >
+            Swap submitted! Tx: {swapTx.slice(0, 10)}…{swapTx.slice(-6)} ↗
+          </a>
         )}
         {swapStatus === 'error' && swapError && (
           <div style={{ marginTop: 12, fontFamily: M, fontSize: 10, color: C.secondary }}>
@@ -546,13 +732,89 @@ function SwapPanel({ address, usdcBalance }: { address: string; usdcBalance: big
   )
 }
 
+// ─── Pending deposit banner ───────────────────────────────────────────────────
+
+function PendingDepositBanner({ deposit }: { deposit: PendingDeposit }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - deposit.startedAt) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [deposit.startedAt])
+
+  const isEthereum = deposit.source === 'ethereum'
+  const estSeconds = isEthereum ? 300 : 2 // 5 min for CCTP, 2s for Starknet
+  const progress   = Math.min(1, elapsed / estSeconds)
+  const remaining  = Math.max(0, estSeconds - elapsed)
+
+  const fmtRemaining = remaining > 60
+    ? `${Math.floor(remaining / 60)}m ${remaining % 60}s`
+    : `${remaining}s`
+
+  return (
+    <div style={{
+      background: 'rgba(156,255,147,0.04)',
+      border: `1px solid rgba(156,255,147,0.15)`,
+      padding: '14px 18px',
+      marginBottom: 28,
+      display: 'flex', alignItems: 'center', gap: 14,
+    }}>
+      {/* Pulsing dot */}
+      <div style={{
+        width: 10, height: 10, borderRadius: '50%',
+        background: C.primary, flexShrink: 0,
+        animation: 'pulse-dot 1.2s ease-in-out infinite',
+        boxShadow: '0 0 8px rgba(156,255,147,0.5)',
+      }} />
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontFamily: M, fontSize: 11, fontWeight: 700, color: C.primary }}>
+            +{deposit.amount} USDC incoming
+          </span>
+          <span style={{ fontFamily: M, fontSize: 10, color: C.dim }}>
+            {progress >= 1 ? 'Arriving any moment…' : `≈ ${fmtRemaining} remaining`}
+          </span>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{ width: '100%', height: 3, background: 'rgba(156,255,147,0.1)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', background: C.primary,
+            width: `${Math.max(5, progress * 100)}%`,
+            transition: 'width 1s linear',
+          }} />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+          <span style={{ fontFamily: M, fontSize: 9, color: C.dim }}>
+            {isEthereum ? 'Bridging via CCTP from Ethereum' : 'Transferring on Starknet'}
+          </span>
+          {deposit.burnTxHash && (
+            <a
+              href={`https://sepolia.etherscan.io/tx/${deposit.burnTxHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontFamily: M, fontSize: 9, color: C.primary, textDecoration: 'none' }}
+            >
+              Etherscan ↗
+            </a>
+          )}
+        </div>
+      </div>
+
+      <style>{`@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }`}</style>
+    </div>
+  )
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({
   label, value, unit, accent, dim, small, icon,
 }: {
   label: string; value: string; unit: string
-  accent: string; dim?: boolean; small?: boolean; icon?: string
+  accent: string; dim?: boolean; small?: boolean; icon?: React.ReactNode
 }) {
   return (
     <div style={{
@@ -567,9 +829,7 @@ function StatCard({
         <span style={{ fontFamily: M, fontSize: 9, color: C.dim, letterSpacing: '0.18em', textTransform: 'uppercase' }}>
           {label}
         </span>
-        {icon && (
-          <span className="material-symbols-outlined" style={{ fontSize: 16, color: accent, opacity: 0.7 }}>{icon}</span>
-        )}
+        {icon && <div style={{ opacity: 0.8 }}>{icon}</div>}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
         <span style={{

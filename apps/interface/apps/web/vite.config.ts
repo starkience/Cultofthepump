@@ -120,6 +120,9 @@ export default defineConfig({
             build.onResolve({ filter: /^react-native$/ }, () => ({ path: rnWebPath }))
             // Map react-native-svg → @tamagui/react-native-svg for pre-bundling
             build.onResolve({ filter: /^react-native-svg$/ }, () => ({ path: rnSvgPath }))
+            // Stub @fatsolutions/tongo-sdk — starkzap re-exports it but we don't use TongoConfidential
+            build.onResolve({ filter: /^@fatsolutions\/tongo-sdk$/ }, () => ({ path: 'tongo-stub', namespace: 'stub' }))
+            build.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ contents: 'export const Account = class {}', loader: 'js' }))
           },
         },
       ],

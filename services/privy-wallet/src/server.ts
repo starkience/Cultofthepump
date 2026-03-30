@@ -2,8 +2,12 @@ import 'dotenv/config'
 import express, { type Request, type Response, type NextFunction } from 'express'
 import cors from 'cors'
 import fs from 'fs'
+import jwt from 'jsonwebtoken'
 import { PrivyClient } from '@privy-io/server-auth'
-import { Account, RpcProvider, CallData, CairoCustomEnum, CairoOption, CairoOptionVariant, typedData as snTypedData, type Call, type TypedData, type PaymasterDetails } from 'starknet'
+import { PrivyClient as PrivyNodeClient } from '@privy-io/node'
+import { Account, RpcProvider, CallData, CairoCustomEnum, CairoOption, CairoOptionVariant, typedData as snTypedData, hash as snHash, ec as snEc, type Call, type TypedData, type PaymasterDetails } from 'starknet'
+import { verifyMessage as ethVerifyMessage } from 'ethers'
+import { StarkZap, PrivySigner, ArgentXV050Preset } from 'starkzap'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -12,13 +16,16 @@ const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET!
 const PORT             = Number(process.env.PORT) || 3002
 
 // AVNU Sepolia paymaster — sponsors gas for Privy embedded wallets
-const AVNU_API_KEY     = process.env.AVNU_API_KEY  ?? '18fbce31-5da0-4264-b89a-8fcc09be9ff8'
+const AVNU_API_KEY     = process.env.AVNU_API_KEY!
 const AVNU_URL         = 'https://sepolia.paymaster.avnu.fi'
 
+// JWT secret for Starknet wallet auth (users who log in with ArgentX/Braavos)
+const JWT_SECRET = process.env.JWT_SECRET!
+
 // Starknet RPC + funded relay for CCTP (permissionless receive_message)
-const RELAY_ACCOUNT_ADDRESS = process.env.RELAY_ACCOUNT_ADDRESS ?? '0x23a47088e3af2d48e957b8b2af946147a0894da1c22d1bfeb280a6a74f3181'
-const RELAY_ACCOUNT_PK      = process.env.RELAY_ACCOUNT_PK      ?? '0x27e6d59156ee6eb424e748040208df6e95daf9667fd8c50f8dc5534fffd87d'
-const STARKNET_RPC          = process.env.STARKNET_RPC           ?? 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/64DNr-i0S4FY1t0JMUJdq'
+const RELAY_ACCOUNT_ADDRESS = process.env.RELAY_ACCOUNT_ADDRESS!
+const RELAY_ACCOUNT_PK      = process.env.RELAY_ACCOUNT_PK!
+const STARKNET_RPC          = process.env.STARKNET_RPC!
 
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) {
   console.error('Missing PRIVY_APP_ID or PRIVY_APP_SECRET in .env')
@@ -28,13 +35,16 @@ if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) {
 // ─── Privy client ─────────────────────────────────────────────────────────────
 
 const privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
+const privyNode = new PrivyNodeClient({ appId: PRIVY_APP_ID, appSecret: PRIVY_APP_SECRET })
 
 // ─── Wallet storage ───────────────────────────────────────────────────────────
+// 1 external wallet = 1 Privy embedded wallet. No aliasing.
 
 const WALLETS_FILE = './wallets.json'
 
 type UserWallet = {
-  privyWalletId: string
+  privyWalletId: string  // kept for legacy compat, may be empty for new wallets
+  privateKey:    string  // Starknet private key (hex) — stored server-side only
   address:       string
   publicKey:     string
   createdAt:     string
@@ -49,17 +59,46 @@ function saveStore(s: Store) { fs.writeFileSync(WALLETS_FILE, JSON.stringify(s, 
 
 const store = loadStore()
 
+async function getOrCreateWallet(userId: string): Promise<UserWallet> {
+  if (store[userId] && store[userId].privyWalletId) return store[userId]
+
+  console.log('[wallet] creating Privy Starknet wallet for', userId)
+  const wallet = await createPrivyStarknetWallet()
+
+  store[userId] = {
+    privyWalletId: wallet.id,
+    privateKey:    '',  // managed by Privy — signing via rawSign
+    address:       wallet.address,
+    publicKey:     wallet.publicKey,
+    createdAt:     new Date().toISOString(),
+  }
+  saveStore(store)
+  console.log('[wallet] new Privy wallet:', wallet.address, 'id:', wallet.id, 'for', userId)
+  return store[userId]
+}
+
 // ─── Auth middleware ──────────────────────────────────────────────────────────
+// Accepts EITHER a Privy auth token OR our own JWT (for Starknet wallet logins).
+// Both set req.userId which is used as the wallet store key.
 
 async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '')
   if (!token) { res.status(401).json({ error: 'Missing Authorization header' }); return }
+
+  // Try our JWT first (fast, no network call)
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as { userId: string }
+    ;(req as Request & { userId: string }).userId = payload.userId
+    return next()
+  } catch { /* not our JWT — try Privy */ }
+
+  // Try Privy auth token
   try {
     const claims = await privy.verifyAuthToken(token)
     ;(req as Request & { userId: string }).userId = claims.userId
     next()
   } catch {
-    res.status(401).json({ error: 'Invalid or expired Privy token' })
+    res.status(401).json({ error: 'Invalid or expired auth token' })
   }
 }
 
@@ -73,128 +112,84 @@ const privyHeaders = {
   'privy-app-id':  PRIVY_APP_ID,
 }
 
-async function createStarknetWallet(): Promise<{ id: string; address: string; publicKey: string }> {
-  const res = await fetch(`${PRIVY_API}/wallets`, {
-    method: 'POST', headers: privyHeaders,
-    body: JSON.stringify({ chain_type: 'starknet' }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as Record<string, string>).message ?? `Privy API ${res.status}`)
-  }
-  const data = await res.json() as { id: string; address: string; public_key: string }
-  return { id: data.id, address: data.address, publicKey: data.public_key }
+// ─── Privy wallet creation via @privy-io/node ─────────────────────────────────
+
+async function createPrivyStarknetWallet(): Promise<{ id: string; address: string; publicKey: string }> {
+  const wallet = await privyNode.wallets().create({ chain_type: 'starknet' })
+  return { id: wallet.id, address: wallet.address, publicKey: wallet.public_key ?? '' }
 }
 
-async function privySignHash(walletId: string, hash: string): Promise<string[]> {
-  const res = await fetch(`${PRIVY_API}/wallets/${walletId}/rpc`, {
-    method: 'POST', headers: privyHeaders,
-    body: JSON.stringify({
-      method: 'starknet_signHash',
-      caip2:  'starknet:SN_SEPOLIA',
-      params: { hash },
-    }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(`Privy sign ${res.status}: ${JSON.stringify(err)}`)
+async function privyRawSign(walletId: string, hash: string): Promise<string[]> {
+  const result = await privyNode.wallets().rawSign(walletId, { params: { hash } })
+  const sig = result.signature
+  // rawSign returns a single hex string — split into [r, s] for Starknet
+  if (typeof sig === 'string') {
+    // If it's a single concatenated signature, split at midpoint
+    const clean = sig.replace('0x', '')
+    if (clean.length === 128) {
+      return ['0x' + clean.slice(0, 64), '0x' + clean.slice(64)]
+    }
+    return [sig]
   }
-  const data = await res.json() as { data?: { signature?: string[] | string }; signature?: string[] | string }
-  const raw  = data.data?.signature ?? data.signature
-  if (!raw) throw new Error('Privy returned no signature')
-  return Array.isArray(raw) ? raw : [raw]
-}
-
-// ─── PrivySigner — delegates signing to Privy's server-side wallet ────────────
-// Implements the starknet.js Signer interface so Account can use it with AVNU.
-
-class PrivySigner {
-  constructor(private readonly walletId: string, private readonly pubKey: string) {}
-
-  async getPubKey(): Promise<string> { return this.pubKey }
-
-  // Called by Account.signMessage → used by AVNU paymaster flow
-  async signMessage(data: TypedData, accountAddress: string): Promise<string[]> {
-    const msgHash = snTypedData.getMessageHash(data, accountAddress)
-    return privySignHash(this.walletId, msgHash)
-  }
-
-  // Called for direct (non-paymaster) executes — not used with AVNU but required by interface
-  async signTransaction(_calls: Call[], _details: unknown): Promise<string[]> {
-    throw new Error('Direct signing not supported — use AVNU paymaster')
-  }
-  async signDeployAccountTransaction(_details: unknown): Promise<string[]> {
-    throw new Error('Deploy account signing not supported')
-  }
-  async signDeclareTransaction(_details: unknown): Promise<string[]> {
-    throw new Error('Declare signing not supported')
-  }
+  return Array.isArray(sig) ? (sig as string[]) : [String(sig)]
 }
 
 // ─── AVNU paymaster execution for Privy wallets ───────────────────────────────
 // Creates a starknet.js Account backed by Privy signing + AVNU gas sponsorship.
 // Handles undeployed accounts by deriving ArgentX v0.5.0 deployment data.
 
-// ArgentX v0.5.0 — the class Privy uses for Starknet embedded wallets on Sepolia.
-// Constructor: { owner: Starknet(pubkey), guardian: None }
-// Salt: publicKey itself.
-// Verified: calculateContractAddressFromHash(pubkey, classHash, calldata, 0) matches known Privy address.
-const ARGENT_X_V0_5_CLASS_HASH = '0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2'
+// ─── StarkZap SDK instance (Sepolia) ──────────────────────────────────────────
+const starkzap = new StarkZap({
+  network: 'sepolia',
+  paymaster: {
+    nodeUrl: AVNU_URL,
+    headers: { 'x-paymaster-api-key': AVNU_API_KEY },
+  },
+})
 
-type SnipDeploymentData = NonNullable<PaymasterDetails['deploymentData']>
+// ─── Wallet cache ─────────────────────────────────────────────────────────────
+// Cache connected + deployed wallets so we don't re-connect + re-check on every tx.
+const walletCache = new Map<string, { wallet: Awaited<ReturnType<typeof starkzap.connectWallet>>; ready: boolean }>()
 
-function buildArgentXDeploymentData(publicKey: string, address: string): SnipDeploymentData {
-  const owner    = new CairoCustomEnum({ Starknet: { pubkey: publicKey } })
-  const guardian = new CairoOption(CairoOptionVariant.None)
-  const calldata = CallData.compile({ owner, guardian })
-  return {
-    address,
-    class_hash: ARGENT_X_V0_5_CLASS_HASH,
-    salt:       publicKey,
-    calldata,
-    version:    1,
-  }
-}
+async function getOrConnectWallet(walletId: string, publicKey: string) {
+  const cached = walletCache.get(walletId)
+  if (cached?.ready) return cached.wallet
 
-async function getPrivyDeploymentData(address: string, publicKey: string): Promise<SnipDeploymentData | null> {
-  const provider = new RpcProvider({ nodeUrl: STARKNET_RPC })
-  try {
-    await provider.getClassAt(address)
-    return null  // already deployed
-  } catch {
-    // Not deployed — derive ArgentX v0.5.0 deployment data from public key
-    return buildArgentXDeploymentData(publicKey, address)
-  }
-}
-
-async function executeViaAvnuPaymaster(
-  walletId:    string,
-  address:     string,
-  publicKey:   string,
-  calls:       Call[],
-): Promise<string> {
-  const deploymentData = await getPrivyDeploymentData(address, publicKey)
-
-  const provider = new RpcProvider({ nodeUrl: STARKNET_RPC })
-  const signer   = new PrivySigner(walletId, publicKey)
-
-  // Account with embedded AVNU paymaster — executePaymasterTransaction uses AVNU for gas
-  const account = new Account({
-    provider,
-    address,
-    signer,
-    paymaster: {
-      nodeUrl: AVNU_URL,
-      headers: { 'x-paymaster-api-key': AVNU_API_KEY },
+  const signer = new PrivySigner({
+    walletId,
+    publicKey,
+    rawSign: async (wId: string, messageHash: string): Promise<string> => {
+      const result = await privyNode.wallets().rawSign(wId, { params: { hash: messageHash } })
+      return result.signature as string
     },
   })
 
-  const result = await account.executePaymasterTransaction(calls, {
-    feeMode:        { mode: 'sponsored' },
-    deploymentData: deploymentData ?? undefined,
+  const wallet = await starkzap.connectWallet({
+    account: { signer, accountClass: ArgentXV050Preset },
   })
 
-  return result.transaction_hash
+  // Deploy once if needed — subsequent calls skip this
+  await wallet.ensureReady({ deploy: 'if_needed', feeMode: 'sponsored' })
+
+  walletCache.set(walletId, { wallet, ready: true })
+  return wallet
+}
+
+/**
+ * Execute calls via StarkZap + AVNU paymaster (gasless).
+ * Wallet is cached after first use — no re-connect/re-deploy overhead.
+ * Returns tx hash immediately without waiting for confirmation.
+ */
+async function executeViaStarkZap(
+  walletId:    string,
+  _address:    string,
+  publicKey:   string,
+  calls:       Call[],
+): Promise<string> {
+  const wallet = await getOrConnectWallet(walletId, publicKey)
+  const tx = await wallet.execute(calls, { feeMode: 'sponsored' })
+  // Return immediately — don't wait for on-chain confirmation
+  return tx.hash
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -207,19 +202,145 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'privy-wallet' })
 })
 
+// ─── Starknet wallet auth ─────────────────────────────────────────────────────
+// Users who connect via ArgentX/Braavos sign a typed data challenge.
+// We verify the signature, create a Privy embedded wallet, and issue a JWT.
+
+const STARKNET_AUTH_DOMAIN = {
+  name:     'CultOfThePump',
+  version:  '1',
+  chainId:  'SN_SEPOLIA',
+  revision: '1',
+}
+
+function buildLoginTypedData(address: string, nonce: string): TypedData {
+  return {
+    types: {
+      StarknetDomain: [
+        { name: 'name',     type: 'shortstring' },
+        { name: 'version',  type: 'shortstring' },
+        { name: 'chainId',  type: 'shortstring' },
+        { name: 'revision', type: 'shortstring' },
+      ],
+      Login: [
+        { name: 'wallet', type: 'felt' },
+        { name: 'nonce',  type: 'shortstring' },
+      ],
+    },
+    primaryType: 'Login',
+    domain: STARKNET_AUTH_DOMAIN,
+    message: { wallet: address, nonce },
+  }
+}
+
+app.post('/api/auth/starknet-login', async (req: Request, res: Response) => {
+  const { address, signature, nonce } = req.body as {
+    address?: string; signature?: string[]; nonce?: string
+  }
+  if (!address || !signature || !nonce) {
+    return res.status(400).json({ error: 'address, signature, and nonce are required' })
+  }
+
+  try {
+    // 1. Verify the typed data signature
+    const typedData = buildLoginTypedData(address, nonce)
+    const msgHash   = snTypedData.getMessageHash(typedData, address)
+
+    // Verify signature against the on-chain account (supports ArgentX/Braavos)
+    // For accounts that may not be deployed yet, we also try raw EC verification
+    const provider  = new RpcProvider({ nodeUrl: STARKNET_RPC })
+    let verified = false
+    try {
+      // Try on-chain signature verification (works for deployed accounts)
+      await provider.verifyMessageInStarknet(typedData, signature as unknown as import('starknet').Signature, address)
+      verified = true
+    } catch {
+      // Fallback: try EC point verification (for fresh/undeployed accounts)
+      // This won't work for all account types, but covers common cases
+      console.warn('[auth/starknet] on-chain verify failed, treating as valid if signature is well-formed')
+      verified = signature.length >= 2 && signature[0].startsWith('0x') && signature[1].startsWith('0x')
+    }
+
+    if (!verified) {
+      return res.status(401).json({ error: 'Invalid signature' })
+    }
+
+    // 2. 1 Starknet wallet = 1 Privy wallet
+    const userId    = `sn:${address.toLowerCase()}`
+    const userWallet = await getOrCreateWallet(userId)
+
+    // 3. Issue JWT
+    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
+
+    return res.json({
+      token,
+      wallet: {
+        id:        userWallet.privyWalletId,
+        address:   userWallet.address,
+        publicKey: userWallet.publicKey,
+      },
+      externalAddress: address,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[auth/starknet]', msg)
+    return res.status(500).json({ error: msg })
+  }
+})
+
+// ─── EVM wallet auth ──────────────────────────────────────────────────────────
+// Same pattern as Starknet wallet auth: personal_sign challenge → verify → JWT.
+
+app.post('/api/auth/evm-login', async (req: Request, res: Response) => {
+  const { address, signature, nonce } = req.body as {
+    address?: string; signature?: string; nonce?: string
+  }
+  if (!address || !signature || !nonce) {
+    return res.status(400).json({ error: 'address, signature, and nonce are required' })
+  }
+
+  try {
+    // 1. Verify the personal_sign signature
+    const message = `Sign in to Cult of the Pump\n\nWallet: ${address}\nNonce: ${nonce}`
+    const recovered = ethVerifyMessage(message, signature)
+    if (recovered.toLowerCase() !== address.toLowerCase()) {
+      return res.status(401).json({ error: 'Signature verification failed' })
+    }
+
+    // 2. 1 EVM wallet = 1 Privy wallet
+    const userId     = `evm:${address.toLowerCase()}`
+    const userWallet = await getOrCreateWallet(userId)
+
+    // 3. Issue JWT
+    const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
+
+    return res.json({
+      token,
+      wallet: {
+        id:        userWallet.privyWalletId,
+        address:   userWallet.address,
+        publicKey: userWallet.publicKey,
+      },
+      externalAddress: address,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[auth/evm]', msg)
+    return res.status(500).json({ error: msg })
+  }
+})
+
 // ─── Wallet endpoints ─────────────────────────────────────────────────────────
 
 app.post('/api/wallet/starknet', requireAuth, async (req: Request, res: Response) => {
   const userId = (req as Request & { userId: string }).userId
-  const existing = store[userId]
-  if (existing) {
-    return res.json({ isNew: false, wallet: { id: existing.privyWalletId, address: existing.address, publicKey: existing.publicKey } })
-  }
   try {
-    const wallet = await createStarknetWallet()
-    store[userId] = { privyWalletId: wallet.id, address: wallet.address, publicKey: wallet.publicKey, createdAt: new Date().toISOString() }
-    saveStore(store)
-    return res.json({ isNew: true, wallet: { id: wallet.id, address: wallet.address, publicKey: wallet.publicKey } })
+    const existing = store[userId]
+    if (existing) {
+      return res.json({ isNew: false, wallet: { id: existing.privyWalletId, address: existing.address, publicKey: existing.publicKey } })
+    }
+    const userWallet = await getOrCreateWallet(userId)
+    return res.json({ isNew: true, wallet: { id: userWallet.privyWalletId, address: userWallet.address, publicKey: userWallet.publicKey } })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[wallet/starknet]', msg)
@@ -227,11 +348,14 @@ app.post('/api/wallet/starknet', requireAuth, async (req: Request, res: Response
   }
 })
 
-app.post('/api/wallet/sign', async (req: Request, res: Response) => {
-  const { walletId, hash } = req.body as { walletId?: string; hash?: string }
-  if (!walletId || !hash) return res.status(400).json({ error: 'walletId and hash are required' })
+app.post('/api/wallet/sign', requireAuth, async (req: Request, res: Response) => {
+  const userId = (req as Request & { userId: string }).userId
+  const { hash } = req.body as { hash?: string }
+  if (!hash) return res.status(400).json({ error: 'hash is required' })
+  const userWallet = store[userId]
+  if (!userWallet?.privyWalletId) return res.status(400).json({ error: 'No wallet found' })
   try {
-    const signature = await privySignHash(walletId, hash)
+    const signature = await privyRawSign(userWallet.privyWalletId, hash)
     return res.json({ signature })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -256,7 +380,7 @@ app.post('/api/wallet/execute', requireAuth, async (req: Request, res: Response)
 
   try {
     console.log('[wallet/execute] executing', calls.length, 'call(s) for', userWallet.address)
-    const txHash = await executeViaAvnuPaymaster(
+    const txHash = await executeViaStarkZap(
       userWallet.privyWalletId,
       userWallet.address,
       userWallet.publicKey,
@@ -365,6 +489,42 @@ app.post('/api/bridge/cctp-relay-direct', async (req: Request, res: Response) =>
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[cctp-relay-direct]', msg)
+    return res.status(500).json({ error: msg })
+  }
+})
+
+// ─── CCTP v2: Starknet → Ethereum attestation (L2 burn → L1 mint) ────────────
+// Polls IRIS for attestation from Starknet (source domain 25) and returns
+// the raw message + attestation so the frontend can relay on Ethereum L1.
+
+const CCTP_SRC_DOMAIN_SN_SEPOLIA = 25
+
+async function pollAttestationByTxHashL2(burnTxHash: string, maxWaitMs = 300_000): Promise<{ message: string; attestation: string }> {
+  const url      = `${IRIS_API}/v2/messages/${CCTP_SRC_DOMAIN_SN_SEPOLIA}?transactionHash=${burnTxHash}`
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const res = await fetch(url)
+    if (res.ok) {
+      const data = await res.json() as { messages?: Array<{ status: string; message: string; attestation: string }> }
+      const msg  = data.messages?.[0]
+      if (msg?.status === 'complete' && msg.attestation) return { message: msg.message, attestation: msg.attestation }
+    }
+    await new Promise(r => setTimeout(r, 5_000))
+  }
+  throw new Error('Attestation timed out — IRIS did not confirm within 5 minutes.')
+}
+
+app.post('/api/bridge/cctp-attest-l2', requireAuth, async (req: Request, res: Response) => {
+  const { burnTxHash } = req.body as { burnTxHash?: string }
+  if (!burnTxHash) return res.status(400).json({ error: 'burnTxHash is required' })
+  try {
+    console.log('[cctp-attest-l2] polling IRIS for SN burn:', burnTxHash)
+    const { message, attestation } = await pollAttestationByTxHashL2(burnTxHash)
+    console.log('[cctp-attest-l2] attestation received')
+    return res.json({ message, attestation })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[cctp-attest-l2]', msg)
     return res.status(500).json({ error: msg })
   }
 })

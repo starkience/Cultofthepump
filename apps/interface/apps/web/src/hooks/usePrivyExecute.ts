@@ -28,7 +28,7 @@ export function usePrivyExecute() {
           'Content-Type':  'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ calls }),
+        body: JSON.stringify({ calls }, (_key, value) => typeof value === 'bigint' ? '0x' + value.toString(16) : value),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string }

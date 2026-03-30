@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Backfill missing trades by querying starknet_getEvents directly."""
-import json, requests, psycopg2
+import json, os, requests, psycopg2
 from decimal import Decimal
 
-RPC = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/6e6ntRee9DYgQFYqVffLB"
+RPC = os.environ.get("STARKNET_RPC", "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/YOUR_KEY")
 SWAP = "0x07a6c0500a1596c0a501156ba660c84c461a599053ab96319d61dfc2626a45b9"
 
 TOKEN_BOUGHT = "0x242149141199ec52571d7e7ef5cea0be9b9ca549cbb2af0f35e0f86d96b739e"
 TOKEN_SOLD   = "0x155a433103a64d02cf5604e092cd2ea4a8acd5bac3ab9c209ba0b03ca05cb81"
 
-conn = psycopg2.connect(host="localhost", dbname="dipdup", user="dipdup", password="dipdup")
+conn = psycopg2.connect(
+    host=os.environ.get("DB_HOST", "localhost"),
+    dbname=os.environ.get("DB_NAME", "dipdup"),
+    user=os.environ.get("DB_USER", "dipdup"),
+    password=os.environ.get("DB_PASSWORD", "dipdup"),
+)
 cur = conn.cursor()
 
 # Get highest indexed block

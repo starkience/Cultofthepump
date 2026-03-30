@@ -4,11 +4,11 @@ const cors = require('cors')
 const { Pool } = require('pg')
 
 const pool = new Pool({
-  user: 'dipdup',
-  host: 'localhost',
-  database: 'dipdup',
-  password: 'dipdup',
-  port: 5432,
+  user: process.env.DB_USER || 'dipdup',
+  host: process.env.DB_HOST || 'localhost',
+  database: process.env.DB_NAME || 'dipdup',
+  password: process.env.DB_PASSWORD || 'dipdup',
+  port: parseInt(process.env.DB_PORT || '5432'),
 })
 
 const app = express()
@@ -28,7 +28,7 @@ async function getBlockTimestamp(blockNumber) {
   if (blockTimestampCache.has(blockNumber)) return blockTimestampCache.get(blockNumber)
   try {
     const response = await fetch(
-      'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/6e6ntRee9DYgQFYqVffLB',
+      process.env.STARKNET_RPC || 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/YOUR_KEY',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

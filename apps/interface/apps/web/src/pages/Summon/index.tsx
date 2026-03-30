@@ -17,7 +17,7 @@ import { SIDED_STEPS } from 'pages/Summon/CardsHelpers'
 import { useToken, useDutchAuction } from 'cotp/src/hooks/useContract'
 import { STRK_SEPOLIA } from 'cotp/src/constants/tokens'
 import { useBlock } from '@starknet-react/core'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 import { useCalls } from 'state/transactions/hooks'
 import { useOpenModal } from 'state/application/hooks'
 import { ApplicationModal } from 'state/application/reducer'
@@ -52,13 +52,27 @@ function parseStrkToWei(value: string): string | null {
 }
 
 async function uploadImage(file: File): Promise<string> {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await fetch('http://localhost:8080/upload-image', { method: 'POST', body: formData })
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-  const { url } = await res.json()
-  if (!url?.startsWith('https://')) throw new Error(`Unexpected response: ${url}`)
-  return url
+  // Convert to a data URL as fallback (works when catbox.moe is down)
+  // Try the API first, fall back to blob URL
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000) // 8s timeout
+    const res = await fetch('http://localhost:8080/upload-image', { method: 'POST', body: formData, signal: controller.signal })
+    clearTimeout(timeout)
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+    const { url } = await res.json()
+    if (url?.startsWith('https://')) return url
+  } catch { /* API/catbox down — use data URL fallback */ }
+
+  // Fallback: convert to data URL (stored in metadata as-is)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function isHttpUrl(url: string): boolean {
@@ -293,7 +307,7 @@ function ImageUploadField({ onStatusChange }: { onStatusChange: (status: UploadS
           <div style={{ flex: 1 }}>
             {uploadState === 'uploading' && (
               <p style={{ fontFamily: C.fontMono, fontSize: 10, color: C.textMuted, margin: '0 0 8px 0' }}>
-                [UPLOADING] Transmitting sigil to catbox.moe...
+                [UPLOADING] Encoding sigil...
               </p>
             )}
             {uploadState === 'done' && (
@@ -368,8 +382,7 @@ function ImageUploadField({ onStatusChange }: { onStatusChange: (status: UploadS
 
 // ─── Main Summon Page ────────────────────────────────────────────────────────
 export default function CultCreatorPage() {
-  const { wallet: _privyWallet } = useStarknetWallet()
-  const address = _privyWallet?.address
+  const { address } = useWallet()
   const isValidStep = useIsValidSummonSteps()
   const auctionPrice = useAuctionPrice()
   const setCultData = useSetCultData()
@@ -407,7 +420,7 @@ export default function CultCreatorPage() {
   const strk = useToken(STRK_SEPOLIA)
   const [, setCalls] = useCalls()
   const openTransactionModal = useOpenModal({ name: ApplicationModal.TRANSACTION })
-  const { data: block } = useBlock({ blockIdentifier: 'pending' as any })
+  const { data: block } = useBlock({ blockIdentifier: 'latest' })
   const { snipingWei } = useCultData()
 
   const calls = useMemo(() => {
@@ -419,7 +432,7 @@ export default function CultCreatorPage() {
     const totalApprove = (startPrice + snipBig).toString()
     return [
       dutchAuction.populate('create_auction', [(block.timestamp - 10).toString(), { low: startPrice.toString(), high: '0' }]),
-      strk.populate('approve', [dutchAuction.address, totalApprove]),
+      strk.populate('approve', [dutchAuction.address, { low: totalApprove, high: '0' }]),
       dutchAuction.populate('bid', [currentName ?? '', currentSymbol ?? '', { low: snipBig.toString(), high: '0' }]),
     ]
   }, [isAllValid, auctionPrice, dutchAuction, strk, currentName, currentSymbol, snipingWei, block])

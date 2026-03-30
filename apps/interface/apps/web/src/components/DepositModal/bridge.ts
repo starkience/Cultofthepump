@@ -29,7 +29,7 @@ export const CCTP_MESSENGER_L1  = CCTP_TOKEN_MESSENGER_L1_SEPOLIA
 
 // ── AVNU Paymaster ────────────────────────────────────────────────────────────
 // Mainnet only — disabled on testnet (Sepolia gas is negligible anyway)
-export const AVNU_API_KEY       = '18fbce31-5da0-4264-b89a-8fcc09be9ff8'
+export const AVNU_API_KEY       = import.meta.env.VITE_AVNU_API_KEY as string ?? ''
 export const AVNU_PAYMASTER_URL = 'https://paymaster.avnu.fi'
 export const PAYMASTER_ENABLED  = false // flip to true when deploying to mainnet
 

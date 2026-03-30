@@ -54,10 +54,8 @@ export function SummonCard(props: FlexProps) {
       const END_PRICE = BigInt('10000000000000000000') // 10 STRK — deployed end_price
       const totalApprove = (END_PRICE + snipingBig).toString()
       return [
-        // start_price must be >= end_price (10 STRK) to avoid u256_sub overflow in create_auction.
-        // Setting start_price = end_price produces a constant-price auction at exactly 10 STRK.
         dutchAuction.populate('create_auction', [(block.timestamp - 10).toString(), { low: END_PRICE.toString(), high: '0' }]),
-        strk.populate('approve', [dutchAuction.address, totalApprove]),
+        strk.populate('approve', [dutchAuction.address, { low: totalApprove, high: '0' }]),
         dutchAuction.populate('bid', [name, symbol, { low: sniping, high: '0' }]),
       ]
     }
@@ -65,7 +63,7 @@ export function SummonCard(props: FlexProps) {
     const auctionPriceBig = BigInt(auctionPrice ?? '0')
     const totalApprove = (auctionPriceBig + snipingBig).toString()
     return [
-      strk.populate('approve', [dutchAuction.address, totalApprove]),
+      strk.populate('approve', [dutchAuction.address, { low: totalApprove, high: '0' }]),
       dutchAuction.populate('bid', [name, symbol, { low: sniping, high: '0' }]),
     ]
   }, [isValidSummon, auctionPrice, dutchAuction, strk, name, symbol, snipingWei, devBypass, block])

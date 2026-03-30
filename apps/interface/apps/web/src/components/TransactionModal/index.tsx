@@ -10,8 +10,7 @@ import { External } from 'ui/src/components/icons'
 import { extractLaunchedTokenAddress, persistSummonMetadata } from './metadata'
 import { SharedQueryClient } from 'cotp/src/data/apiClients/SharedQueryClient'
 import { COTP_INDEXER_API_CACHE_KEY } from 'cotp/src/data/apiClients/cotpIndexerApi/cotpIndexerApiClient'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
-import { usePrivyExecute } from 'hooks/usePrivyExecute'
+import { useWallet } from 'context/WalletContext'
 
 interface WalletModalProps {
   isOpen: boolean
@@ -23,13 +22,9 @@ export function TransactionModal({ isOpen, onDismiss }: WalletModalProps) {
   const [calls, setCalls] = useCalls()
   const { name, symbol, manifesto } = useCultData()
   const visualUrl = useCultVisual()
-  const { wallet } = useStarknetWallet()
-  const creatorAddress = wallet?.address ?? null
+  const { address: creatorAddress, execute, executeStatus: status, executeTxHash: txHash, executeError: error, executeReset: reset } = useWallet()
   const [launchedTokenAddress, setLaunchedTokenAddress] = useState<string | null>(null)
   const persistedTransactionRef = useRef<string | null>(null)
-
-  // Privy paymaster execution
-  const { execute, status, txHash, error, reset } = usePrivyExecute()
 
   // Transaction receipt polling (read-only — no wallet needed)
   const transactionReceipt = useTransactionReceipt({ hash: txHash ?? undefined, watch: true, refetchInterval: 2000 })

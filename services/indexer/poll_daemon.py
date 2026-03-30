@@ -17,7 +17,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("poller")
 
-RPC  = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/64DNr-i0S4FY1t0JMUJdq"
+RPC  = os.environ.get("STARKNET_RPC", "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/YOUR_KEY")
 SWAP = "0x07a6c0500a1596c0a501156ba660c84c461a599053ab96319d61dfc2626a45b9"
 FACTORY = "0x0135abb443cbba9738fe63d55a06810fdf14b605ddc5262220a889411baede25"
 
@@ -28,7 +28,12 @@ SHITCOIN_LAUNCHED = "0x13c55d5a688e68efda2ce06be4610294f379806ba89c405627c50579d
 
 POLL_INTERVAL = 30  # seconds
 
-DB_PARAMS = dict(host="localhost", dbname="dipdup", user="dipdup", password="dipdup")
+DB_PARAMS = dict(
+    host=os.environ.get("DB_HOST", "localhost"),
+    dbname=os.environ.get("DB_NAME", "dipdup"),
+    user=os.environ.get("DB_USER", "dipdup"),
+    password=os.environ.get("DB_PASSWORD", "dipdup"),
+)
 
 _running = True
 

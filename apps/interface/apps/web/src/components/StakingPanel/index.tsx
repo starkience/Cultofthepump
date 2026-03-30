@@ -4,7 +4,7 @@ import { Button, Flex, Text } from 'ui/src'
 import { TextInput } from 'ui/src'
 import { WindowCard } from 'components/Card/WindowCard'
 import { useReadContract } from '@starknet-react/core'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 import { useTokenAt } from 'cotp/src/hooks/useContract'
 import { STAKING_ADDRESS, StakingABI, ERC20ABI } from 'cotp/src/constants/contracts'
 import { useCalls } from 'state/transactions/hooks'
@@ -32,8 +32,7 @@ export function StakingPanel({ tokenAddress, tokenSymbol }: Props) {
   const [tab, setTab] = useState<'stake' | 'unstake'>('stake')
   const [amountInput, setAmountInput] = useState('')
 
-  const { wallet: _stakingWallet } = useStarknetWallet()
-  const connectedAddress = _stakingWallet?.address
+  const { address: connectedAddress } = useWallet()
   const cult = useTokenAt(tokenAddress)
   const [, setCalls] = useCalls()
   const openTransactionModal = useOpenModal({ name: ApplicationModal.TRANSACTION })

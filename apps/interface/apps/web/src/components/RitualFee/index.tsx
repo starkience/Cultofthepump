@@ -5,7 +5,7 @@ import { useSetAuctionPrice } from 'state/summon/hooks'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCurrentAuction, AuctionTimerData } from 'cotp/src/features/auction/api'
 import { useBlock } from '@starknet-react/core'
-import { useStarknetWallet } from 'components/PrivyConnect/useStarknetWallet'
+import { useWallet } from 'context/WalletContext'
 import { usePrivyExecute } from 'hooks/usePrivyExecute'
 import { DutchAuctionABI, DUTCH_AUCTION_ADDRESS } from 'cotp/src/constants/contracts'
 import { CallData } from 'starknet'
@@ -90,8 +90,7 @@ function AuctionCountdown({ timer }: { timer: AuctionTimerData }) {
 }
 
 export function RitualFee() {
-  const { wallet } = useStarknetWallet()
-  const address = wallet?.address
+  const { address } = useWallet()
   const { data: auctionData, isLoading, error } = useCurrentAuction()
   const setAuctionPrice = useSetAuctionPrice()
 

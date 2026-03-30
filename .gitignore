@@ -1,4 +1,11 @@
 archive/import-snapshots/
 protocol/contracts/deployments/runs/
 protocol/contracts/deployments/*.local.json
+
+# Environment files with secrets (use .env.example as template)
+.env
+.env.local
 apps/interface/apps/web/.env
+services/privy-wallet/.env
+services/privy-wallet/wallets.json
+services/privy-wallet/wallet-aliases.json
