@@ -147,9 +147,10 @@ function BelieveSinPanel({ tokenAddress, tokenSymbol }: { tokenAddress: string; 
   const handleTrade = useCallback(() => {
     if (!parsedAmount || !swap || !strk || !cult) return
     const tokenDispatcher = { contract_address: tokenAddress }
+    const amt = { low: parsedAmount, high: 0n } // u256 encoding for Starknet
     const calls = isBuy
-      ? [strk.populate('approve', [SWAP_ADDRESS, parsedAmount]), swap.populate('buy', [parsedAmount, tokenDispatcher])]
-      : [cult.populate('approve', [SWAP_ADDRESS, parsedAmount]), swap.populate('sell', [parsedAmount, tokenDispatcher])]
+      ? [strk.populate('approve', [SWAP_ADDRESS, amt]), swap.populate('buy', [amt, tokenDispatcher])]
+      : [cult.populate('approve', [SWAP_ADDRESS, amt]), swap.populate('sell', [amt, tokenDispatcher])]
     setCalls(calls)
     openTransactionModal()
   }, [isBuy, parsedAmount, swap, strk, cult, tokenAddress, setCalls, openTransactionModal])

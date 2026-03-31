@@ -550,8 +550,7 @@ function SwapPanel({ address, usdcBalance, strkBalance, onTx }: {
         slippageBps:  100n,
       })
       setQuote(fmtBal(q.amountOutBase, buyDecimals))
-    } catch (err) {
-      console.error('[swap quote]', err)
+    } catch {
       setQuote(null)
     } finally {
       setQuoting(false)

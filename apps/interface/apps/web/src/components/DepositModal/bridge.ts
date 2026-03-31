@@ -204,19 +204,13 @@ export async function bridgeEthereumToStarknet(
     method: 'eth_sendTransaction',
     params: [{ from: ethAddress, to: USDC_ETH, data: `${APPROVE}${messengerPad}${amountSlot}` }],
   }) as string
-  console.log('[cctp] approve tx:', approveTx)
-
-  // Wait for approve to be mined before spending the allowance
-  console.log('[cctp] waiting for approve to be mined…')
   await waitForReceipt(approveTx)
-  console.log('[cctp] approve confirmed')
 
   // 2. depositForBurn
   const burnTx = await provider.request({
     method: 'eth_sendTransaction',
     params: [{ from: ethAddress, to: CCTP_MESSENGER_L1, data: `${DEPOSIT_FOR_BURN}${calldata}` }],
   }) as string
-  console.log('[cctp] burn tx:', burnTx)
 
   return burnTx
 }
@@ -234,7 +228,6 @@ export async function bridgeSolanaToStarknet(
   if (!solana) throw new Error('Phantom wallet not found — please install Phantom.')
   if (!solana.isConnected) await solana.connect()
 
-  console.log('[hyperlane] destination:', starknetAddress, 'USDC_SN:', USDC_SN)
 
   throw new Error('Solana bridging requires @hyperlane-xyz/sdk — coming soon.')
 }
