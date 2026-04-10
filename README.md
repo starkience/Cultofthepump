@@ -62,7 +62,8 @@ protocol/contracts/      Cairo smart contracts (Scarb)
 5. **Summon** -- create a new cult token (Dutch auction fee + bonding curve launch)
 6. **Trade** -- buy/sell cult tokens on the bonding curve (pre-graduation)
 7. **Graduate** -- when market cap hits 101,010 STRK, liquidity moves to Ekubo AMM
-8. **Withdraw** -- send USDC to Starknet address or bridge back to Ethereum via CCTP
+8. **Stake** -- stake cult tokens to earn a share of that token's trading fees in STRK. Unlike most memecoins where only LPs and the team profit from volume, staking lets believers earn yield from the activity they help generate. This creates a flywheel: more volume → more fees → more staking yield → more holders → more volume
+9. **Withdraw** -- send USDC to Starknet address or bridge back to Ethereum via CCTP
 
 ## Quick Start
 
