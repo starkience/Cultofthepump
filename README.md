@@ -2,11 +2,42 @@
 
 A full-stack memecoin launchpad on Starknet with gasless UX, bonding curves, and AVNU-powered swaps.
 
+## Taking Up This Project
+
+This is an open-source project. If you're forking it to build your own instance, here's what you need to know: **the smart contracts and application code are complete, but several infrastructure pieces need to be provisioned by you.** The codebase is designed so that each external dependency can be swapped out for your preferred provider.
+
+### What you need to set up yourself
+
+**RPC provider** -- The app needs a Starknet JSON-RPC endpoint for the frontend, wallet service, and indexer. The codebase defaults to Alchemy, but any provider works (Infura, Blast, or a self-hosted Juno/Pathfinder node). You'll configure the same RPC URL in three `.env` files. See [RPC Providers](#rpc-providers) for details.
+
+**Image / file storage** -- Token images currently upload through a temporary proxy to catbox.moe, a free host with no persistence guarantees. **You should replace this with your own storage.** IPFS (via Pinata, web3.storage, or Fleek) is the natural fit for a decentralized app. Alternatively, use S3 or Cloudinary. The only file to change is `services/api/internal/handlers/upload.go`. See [Image Storage](#image-storage).
+
+**Token metadata persistence** -- Token metadata (name, symbol, description, image URL, manifesto) lives in a PostgreSQL table. It is **not** stored on IPFS or on-chain. If you want decentralized metadata, you'll need to add IPFS pinning and optionally store the CID on-chain. See [Token Metadata Storage](#token-metadata-storage).
+
+**Database** -- You need PostgreSQL. The indexer's docker-compose includes TimescaleDB and Hasura out of the box. The metadata API shares the same database. There is no migration tool -- schema is applied with a single SQL file. See [Database](#database).
+
+**Wallet infrastructure** -- You need accounts with [Privy](https://dashboard.privy.io) (embedded wallets) and [AVNU](https://www.avnu.fi) (gas sponsorship / paymaster). Both have free tiers for testnet.
+
+**Chat persistence** -- The WebSocket chat keeps the last 100 messages in memory. They're lost on restart. Add a Postgres table or Redis if you need persistence. See [Chat Persistence](#chat-persistence).
+
+**Deployment / hosting** -- Only the indexer stack has Docker Compose and K8s manifests. The Go API, wallet service, and frontend have no Dockerfiles or CI/CD. You'll need to write your own deployment config. See [Deployment Architecture](#deployment-architecture).
+
+### What's already done
+
+- All Cairo smart contracts (bonding curve, swap, dutch auction, factory, staking) -- deployed on Sepolia
+- Full React frontend with gasless UX
+- Privy embedded wallet service with AVNU paymaster
+- Go metadata API with WebSocket chat
+- DipDup on-chain indexer with Hasura GraphQL
+- CCTP v2 bridge endpoints (Ethereum ↔ Starknet)
+
+See the [Checklist for a New Fork](#checklist-for-a-new-fork) for a step-by-step setup guide.
+
 ## Architecture
 
 ```
 apps/interface/          React frontend (Vite + Tamagui)
-services/privy-wallet/   Wallet service (Privy + StarkZap + AVNU paymaster)
+services/privy-wallet/   Wallet service (Privy + Starkzap + AVNU paymaster)
 services/api/            Metadata API + WebSocket chat (Go + Postgres)
 services/indexer/        On-chain indexer (DipDup)
 services/graphql-bridge/ GraphQL layer over indexer DB
@@ -15,7 +46,7 @@ protocol/contracts/      Cairo smart contracts (Scarb)
 
 ## Key Integrations
 
-- **StarkZap SDK** -- wallet management, AVNU swap provider, account presets, gasless deployment
+- **Starkzap SDK** -- wallet management, AVNU swap provider, account presets, gasless deployment
 - **Privy** (`@privy-io/node`) -- embedded Starknet wallet creation + signing via `rawSign`
 - **AVNU Paymaster** -- gasless transactions for all users
 - **CCTP v2** -- USDC bridging from Ethereum to Starknet
@@ -27,7 +58,7 @@ protocol/contracts/      Cairo smart contracts (Scarb)
 1. **Login** -- users connect via ArgentX, Braavos, MetaMask, or Phantom (custom login popup)
 2. **Embedded wallet** -- each user gets a Privy-managed Starknet wallet for gasless execution
 3. **Deposit** -- USDC from Ethereum (CCTP bridge, ~5 min) or Starknet wallet (direct transfer, ~2s)
-4. **Swap** -- USDC/STRK swaps via StarkZap's AVNU provider
+4. **Swap** -- USDC/STRK swaps via Starkzap's AVNU provider
 5. **Summon** -- create a new cult token (Dutch auction fee + bonding curve launch)
 6. **Trade** -- buy/sell cult tokens on the bonding curve (pre-graduation)
 7. **Graduate** -- when market cap hits 101,010 STRK, liquidity moves to Ekubo AMM
@@ -93,9 +124,187 @@ cd services/graphql-bridge && node index.js
 cd services/indexer/cotp_indexer && dipdup run
 ```
 
-### 4. Open the app
+### 4. Set up the database
+
+```bash
+# Start PostgreSQL (or use the indexer's docker-compose which includes TimescaleDB)
+# Create the metadata table:
+psql -U dipdup -d dipdup -f services/api/sql/create-tokens.sql
+```
+
+### 5. Open the app
 
 Visit **http://localhost:5173**
+
+---
+
+## Infrastructure Guide
+
+This section is for anyone forking/deploying the project. It covers every external dependency and what you need to provision.
+
+### External Services (accounts required)
+
+| Service | Purpose | Free tier? | Sign up |
+|---------|---------|-----------|---------|
+| **Privy** | Embedded Starknet wallet creation + signing | Yes (dev) | https://dashboard.privy.io |
+| **AVNU** | Paymaster (gasless tx) + swap aggregation | Yes (testnet) | https://www.avnu.fi |
+| **Alchemy** | Starknet RPC (Sepolia / Mainnet) | Yes (rate-limited) | https://www.alchemy.com |
+| **Starknet wallet** | Contract deployment + CCTP relay | Fund with STRK faucet | https://faucet.starknet.io |
+
+### RPC Providers
+
+The project needs a Starknet JSON-RPC endpoint. Currently configured for **Alchemy**, but any provider works:
+
+- **Alchemy** — used in `.env.example` defaults
+- **Infura** — `https://starknet-sepolia.infura.io/v3/YOUR_KEY`
+- **Blast** — free public endpoint (rate-limited, no key needed)
+- **Self-hosted** — run a [Juno](https://github.com/NethermindEth/juno) or [Pathfinder](https://github.com/eqlabs/pathfinder) node
+
+Set the same RPC URL in all three places:
+1. `apps/interface/apps/web/.env` → `VITE_ALCHEMY_RPC_URL`
+2. `services/privy-wallet/.env` → `STARKNET_RPC`
+3. `services/indexer/cotp_indexer/dipdup.yaml` → `datasources.node.url`
+
+### Image Storage
+
+**Current: catbox.moe (not production-grade)**
+
+Token images are uploaded via the Go API (`POST /upload-image`), which proxies them to [catbox.moe](https://catbox.moe) — a free anonymous file host. This works for testnet but has **no SLA, no persistence guarantees, and files can be deleted at any time**.
+
+**To replace with IPFS for production:**
+
+1. Sign up for [Pinata](https://pinata.cloud), [web3.storage](https://web3.storage), or [NFT.Storage](https://nft.storage)
+2. Replace the catbox.moe proxy in `services/api/internal/handlers/upload.go` with your IPFS pinning API
+3. Store the returned `ipfs://` CID in the `image_url` column
+4. Serve images via an IPFS gateway (e.g. `https://gateway.pinata.cloud/ipfs/`) or your own gateway
+
+**Alternative: S3/Cloudinary**
+
+You can also use S3 or Cloudinary instead of IPFS. Modify `upload.go` to upload to your provider and return the resulting URL.
+
+### Token Metadata Storage
+
+**Current: PostgreSQL only**
+
+Token metadata (name, symbol, description, image URL, manifesto) lives in a single Postgres table (`tokens`). This is **not decentralized** — if the database is lost, metadata is gone.
+
+**For production, consider:**
+- **IPFS**: Store a JSON metadata blob on IPFS, save the CID on-chain or in Postgres
+- **Arweave**: Permanent storage (~$0.01 per metadata record)
+- **On-chain**: Store metadata hash in the token contract (requires contract modification)
+
+The schema is in `services/api/sql/create-tokens.sql`. There is **no migration tool** — schema changes are applied manually with `psql`.
+
+### Chat Persistence
+
+**Current: In-memory only**
+
+The WebSocket chat (`services/api/internal/handlers/chat.go`) keeps the last 100 messages in a Go slice. **All history is lost on server restart.**
+
+**To add persistence:**
+- Add a `chat_messages` table to Postgres
+- Write messages to DB in the broadcast loop
+- Load from DB instead of the in-memory slice on startup
+- Or use Redis pub/sub for multi-instance deployments
+
+### Database
+
+The project uses a single **PostgreSQL** instance shared between the metadata API and the DipDup indexer.
+
+**Indexer stack** (has its own docker-compose):
+```bash
+cd services/indexer/cotp_indexer/deploy
+cp .env.default .env  # edit POSTGRES_PASSWORD and HASURA_SECRET
+docker compose up -d
+# Starts: TimescaleDB (pg15), Hasura GraphQL Engine, DipDup indexer
+```
+
+**Metadata API** (uses the same database):
+```bash
+# Apply schema to the same database the indexer uses:
+psql -U dipdup -d dipdup -f services/api/sql/create-tokens.sql
+```
+
+**No migration system exists.** For production, consider adding [golang-migrate](https://github.com/golang-migrate/migrate), [Atlas](https://atlasgo.io), or [Flyway](https://flywaydb.org).
+
+### Deployment Architecture
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
+│  Frontend    │────▶│  Wallet Service  │────▶│  Starknet   │
+│  (Vite/SPA) │     │  (Node.js:3002)  │     │  RPC Node   │
+└──────┬──────┘     └──────────────────┘     └─────────────┘
+       │
+       ├───────────▶┌──────────────────┐     ┌─────────────┐
+       │            │  Metadata API    │────▶│  PostgreSQL  │
+       │            │  (Go:8080)       │     │             │
+       │            └──────────────────┘     └──────┬──────┘
+       │                                            │
+       └───────────▶┌──────────────────┐     ┌──────┴──────┐
+                    │  GraphQL Bridge   │────▶│  Hasura     │
+                    │  (Node.js:42000)  │     │  (:8080)    │
+                    └──────────────────┘     └──────┬──────┘
+                                                    │
+                                             ┌──────┴──────┐
+                                             │  DipDup     │
+                                             │  Indexer    │
+                                             └─────────────┘
+```
+
+**What exists:**
+- Docker Compose for the indexer stack (DipDup + TimescaleDB + Hasura)
+- K8s manifests for the indexer stack (`services/indexer/cotp_indexer/deploy/k8s/`)
+
+**What's missing (you need to set up):**
+- Dockerfiles for the Go metadata API, wallet service, and frontend
+- A root-level `docker-compose.yml` for the full stack
+- CI/CD pipeline (GitHub Actions, etc.)
+- TLS termination / reverse proxy (nginx, Caddy, or cloud LB)
+- Domain + DNS configuration
+- Monitoring/alerting (the Go API has `/healthz`, but no metrics)
+
+### Contract Deployment (your own instance)
+
+If you want to deploy your own contracts (not use the existing Sepolia addresses):
+
+```bash
+cd protocol/contracts
+
+# Install Starknet Foundry (sncast + snforge)
+# https://foundry-rs.github.io/starknet-foundry/
+
+# Configure your deployer account
+export STARKNET_ACCOUNT=~/.starknet_accounts/account.json
+export STARKNET_SEPOLIA_RPC_URL=https://starknet-sepolia.g.alchemy.com/...
+
+# Run the deployment script
+bash scripts/deploy/sepolia.sh
+```
+
+After deploying, update the contract addresses in:
+1. `services/indexer/cotp_indexer/dipdup.yaml` (indexer watches these addresses)
+2. `apps/interface/apps/web/src/` (frontend references, grep for the old addresses)
+
+### CCTP Bridge (Ethereum ↔ Starknet)
+
+The CCTP v2 bridge for USDC requires a **funded relay account** on Starknet that calls `receive_message`. This account needs STRK for gas. The relay is permissionless — USDC always mints to the user, not the relayer.
+
+**Note:** The Hyperlane SDK integration is **stubbed** — the bridge currently uses Circle's IRIS attestation API directly (`https://iris-api-sandbox.circle.com` for testnet).
+
+### Checklist for a New Fork
+
+- [ ] Create Privy app, get APP_ID + APP_SECRET
+- [ ] Get AVNU API key
+- [ ] Get Alchemy (or other) RPC key
+- [ ] Set up PostgreSQL (or use the indexer docker-compose)
+- [ ] Run `create-tokens.sql` for the metadata table
+- [ ] Fund a Starknet account for CCTP relaying (or disable bridge)
+- [ ] Generate a JWT_SECRET for wallet auth
+- [ ] (Optional) Deploy your own contracts or use existing Sepolia addresses
+- [ ] (Optional) Replace catbox.moe with IPFS/S3/Cloudinary for image storage
+- [ ] (Optional) Add chat persistence (Postgres or Redis)
+- [ ] (Optional) Write Dockerfiles for API + wallet service + frontend
+- [ ] (Optional) Set up CI/CD pipeline
 
 ## Smart Contracts
 
@@ -318,7 +527,7 @@ services/privy-wallet/src/server.ts
   - POST /api/auth/starknet-login   Starknet wallet auth (sign challenge → JWT)
   - POST /api/auth/evm-login        EVM wallet auth (personal_sign → JWT)
   - POST /api/wallet/starknet       Create/get Privy embedded wallet
-  - POST /api/wallet/execute         Execute calls via StarkZap + AVNU paymaster
+  - POST /api/wallet/execute         Execute calls via Starkzap + AVNU paymaster
   - POST /api/wallet/sign            Sign a hash with Privy rawSign
   - POST /api/bridge/cctp-attest     Ethereum→Starknet CCTP attestation + relay
   - POST /api/bridge/cctp-attest-l2  Starknet→Ethereum CCTP attestation
@@ -335,7 +544,7 @@ protocol/contracts/
 User action (summon/buy/sell/swap)
   → Frontend builds Call[] via starknet.js .populate()
   → POST /api/wallet/execute with JWT auth
-  → Server: StarkZap connectWallet (PrivySigner + ArgentX v0.5.0 preset)
+  → Server: Starkzap connectWallet (PrivySigner + ArgentX v0.5.0 preset)
   → Server: wallet.ensureReady (auto-deploy if needed, paymaster-sponsored)
   → Server: wallet.execute(calls, { feeMode: 'sponsored' })
   → AVNU paymaster sponsors gas
