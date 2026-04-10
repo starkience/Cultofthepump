@@ -8,7 +8,7 @@ This is an open-source project. If you're forking it to build your own instance,
 
 ### What you need to set up yourself
 
-**RPC provider** -- The app needs a Starknet JSON-RPC endpoint for the frontend, wallet service, and indexer. The codebase defaults to Alchemy, but any provider works (Infura, Blast, or a self-hosted Juno/Pathfinder node). You'll configure the same RPC URL in three `.env` files. See [RPC Providers](#rpc-providers) for details.
+**RPC provider** -- The app needs a Starknet JSON-RPC endpoint for the frontend, wallet service, and indexer. We recommend **Alchemy** (free tier available), but any provider works (Infura or a self-hosted Juno/Pathfinder node). You'll configure the same RPC URL in three `.env` files. See [RPC Providers](#rpc-providers) for details.
 
 **Image / file storage** -- Token images currently upload through a temporary proxy to catbox.moe, a free host with no persistence guarantees. **You should replace this with your own storage.** IPFS (via Pinata, web3.storage, or Fleek) is the natural fit for a decentralized app. Alternatively, use S3 or Cloudinary. The only file to change is `services/api/internal/handlers/upload.go`. See [Image Storage](#image-storage).
 
@@ -156,9 +156,8 @@ This section is for anyone forking/deploying the project. It covers every extern
 
 The project needs a Starknet JSON-RPC endpoint. Currently configured for **Alchemy**, but any provider works:
 
-- **Alchemy** — used in `.env.example` defaults
+- **Alchemy** (recommended) — used in `.env.example` defaults, free tier available at https://www.alchemy.com
 - **Infura** — `https://starknet-sepolia.infura.io/v3/YOUR_KEY`
-- **Blast** — free public endpoint (rate-limited, no key needed)
 - **Self-hosted** — run a [Juno](https://github.com/NethermindEth/juno) or [Pathfinder](https://github.com/eqlabs/pathfinder) node
 
 Set the same RPC URL in all three places:
